@@ -8,7 +8,11 @@ export type StablePrefixPluginConfig = CorePolicyConfig & {
 };
 
 export function resolvePluginConfig(raw: unknown): StablePrefixPluginConfig {
-  const value = typeof raw === "object" && raw ? (raw as Record<string, unknown>) : {};
+  const entry = typeof raw === "object" && raw ? (raw as Record<string, unknown>) : {};
+  const value =
+    typeof entry.config === "object" && entry.config
+      ? (entry.config as Record<string, unknown>)
+      : entry;
   return {
     telemetryPath:
       typeof value.telemetryPath === "string" ? expandHome(value.telemetryPath) : undefined,
