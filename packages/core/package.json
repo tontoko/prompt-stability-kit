@@ -1,0 +1,29 @@
+{
+  "name": "@tontoko/prompt-stability-core",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Stable-prefix prompt assembly core for cache-friendly agent runtimes.",
+  "license": "MIT",
+  "repository": "https://github.com/tontoko/prompt-stability-kit",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "prompt-stability",
+    "prompt-cache",
+    "stable-prefix",
+    "llm"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run"
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "name": "@tontoko/openclaw-stable-prefix-context",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Official OpenClaw context-engine adapter for prompt-stability-kit.",
+  "license": "MIT",
+  "repository": "https://github.com/tontoko/prompt-stability-kit",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "openclaw.plugin.json"
+  ],
+  "openclaw": {
+    "extensions": [
+      "./src/index.ts"
+    ],
+    "compat": {
+      "pluginApi": ">=2026.4.9",
+      "minGatewayVersion": "2026.4.9"
+    },
+    "build": {
+      "openclawVersion": "2026.4.9",
+      "pluginSdkVersion": "2026.4.9"
+    }
+  },
+  "keywords": [
+    "openclaw",
+    "context-engine",
+    "prompt-cache",
+    "stable-prefix"
+  ],
+  "dependencies": {
+    "@tontoko/prompt-stability-core": "0.1.0",
+    "openclaw": "2026.4.9"
+  },
+  "scripts": {
+    "build": "tsc -b"
+  }
+}

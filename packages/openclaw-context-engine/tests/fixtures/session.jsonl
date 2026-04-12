@@ -1,0 +1,3 @@
+{"type":"session","version":3,"id":"demo","timestamp":"2026-04-12T00:00:00.000Z","cwd":"/tmp"}
+{"type":"message","id":"msg-1","timestamp":"2026-04-12T00:00:01.000Z","message":{"role":"user","content":[{"type":"text","text":"Conversation info (untrusted metadata):\n```json\n{\"sender\":\"alice\"}\n```\n\nMessage body:\nhello world"}]}}
+{"type":"message","id":"msg-2","timestamp":"2026-04-12T00:00:02.000Z","message":{"role":"user","content":[{"type":"text","text":"<<<BEGIN_OPENCLAW_INTERNAL_CONTEXT>>>\n[Internal task completion event]\nchild session completed\n<<<END_OPENCLAW_INTERNAL_CONTEXT>>>"}]}}

@@ -1,0 +1,28 @@
+{
+  "name": "@tontoko/prompt-stability-inspector",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Diagnostics CLI for prompt-stability telemetry streams.",
+  "license": "MIT",
+  "repository": "https://github.com/tontoko/prompt-stability-kit",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "prompt-stability-inspector": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@tontoko/prompt-stability-core": "0.1.0"
+  },
+  "scripts": {
+    "build": "tsc -b"
+  }
+}

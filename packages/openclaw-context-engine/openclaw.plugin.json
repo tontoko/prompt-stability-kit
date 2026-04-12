@@ -1,0 +1,36 @@
+{
+  "id": "stable-prefix-context",
+  "name": "Stable Prefix Context",
+  "description": "OpenClaw context engine that canonicalizes volatile wrappers and emits prompt-stability diagnostics.",
+  "kind": "context-engine",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "telemetryPath": {
+        "type": "string",
+        "description": "Optional JSONL output path for assemble diagnostics."
+      },
+      "dedupeControlMessages": {
+        "type": "boolean",
+        "default": true,
+        "description": "Collapse repeated canonical control messages."
+      },
+      "rewriteTranscript": {
+        "type": "boolean",
+        "default": true,
+        "description": "Rewrite older wrapper-heavy transcript entries into canonical form."
+      },
+      "maxInternalContextChars": {
+        "type": "number",
+        "default": 800,
+        "description": "Maximum internal runtime context characters to retain after canonicalization."
+      },
+      "maxConversationWrapperBodyChars": {
+        "type": "number",
+        "default": 1600,
+        "description": "Maximum conversation wrapper body characters to retain after canonicalization."
+      }
+    }
+  }
+}
