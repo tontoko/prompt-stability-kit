@@ -28,11 +28,21 @@ function stringifyContent(content: unknown): string {
     return content
       .map((part) => {
         if (typeof part === "string") return part;
-        if (part && typeof part === "object" && "text" in part && typeof part.text === "string") {
+        if (
+          part &&
+          typeof part === "object" &&
+          "text" in part &&
+          typeof part.text === "string" &&
+          (!("type" in part) ||
+            part.type === "text" ||
+            part.type === "input_text" ||
+            part.type === "output_text")
+        ) {
           return part.text;
         }
-        return JSON.stringify(part);
+        return "";
       })
+      .filter((part) => part.length > 0)
       .join("\n");
   }
   if (content && typeof content === "object") return JSON.stringify(content, null, 2);
