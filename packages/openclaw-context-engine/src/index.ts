@@ -4,10 +4,7 @@ import {
   type DiagnosticsSnapshot,
 } from "@tontoko/prompt-stability-core";
 import { loadConfig } from "openclaw/plugin-sdk/config-runtime";
-import {
-  buildMemorySystemPromptAddition,
-  delegateCompactionToRuntime,
-} from "openclaw/plugin-sdk/core";
+import { delegateCompactionToRuntime } from "openclaw/plugin-sdk/core";
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 
 import { resolvePluginConfig } from "./config.js";
@@ -110,10 +107,6 @@ export default definePluginEntry({
           return {
             messages: params.messages,
             estimatedTokens: Math.ceil(plan.estimatedChars / 4),
-            systemPromptAddition: buildMemorySystemPromptAddition({
-              availableTools: params.availableTools ?? new Set<string>(),
-              citationsMode: params.citationsMode as never,
-            }),
           };
         },
 
