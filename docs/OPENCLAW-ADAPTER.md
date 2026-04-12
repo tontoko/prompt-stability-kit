@@ -8,15 +8,34 @@ Registered context-engine id:
 
 - `stable-prefix-context`
 
-## Behavior
+## Role in the architecture
 
-The adapter focuses on wrapper normalization, transcript maintenance, and
-telemetry. It does not replace OpenClaw's built-in compaction algorithm.
+The adapter is the OpenClaw-specific shell around the generic optimizer core.
+Its responsibilities are:
 
-- `ownsCompaction: false`
-- `compact()` delegates to `delegateCompactionToRuntime(...)`
-- `assemble()` canonicalizes volatile wrapper messages
-- `maintain()` rewrites older transcript entries into canonical form
+- normalize OpenClaw messages into core blocks
+- invoke the core assembly plan
+- expose adapter configuration
+- emit telemetry for real-session evaluation
+
+The adapter is not intended to become a second policy engine. Prefix-stability
+decisions belong in the core package.
+
+## Runtime behavior
+
+Current runtime responsibilities:
+
+- `assemble()`
+  Normalize OpenClaw messages into blocks, compute an optimization plan, reorder
+  blocks deterministically, and emit prompt-assembly telemetry.
+- `afterTurn()`
+  Emit provider usage and prompt-cache telemetry after the turn completes.
+- `compact()`
+  Delegate to the OpenClaw runtime compactor.
+
+The adapter does not perform transcript rewriting. Its job is to expose the
+core optimizer inside OpenClaw and make the resulting behavior observable in
+real development sessions.
 
 ## Config
 
@@ -29,30 +48,36 @@ telemetry. It does not replace OpenClaw's built-in compaction algorithm.
     "entries": {
       "stable-prefix-context": {
         "enabled": true,
-        "telemetryPath": "~/.openclaw/logs/context-engine/stable-prefix.jsonl",
-        "dedupeControlMessages": true,
-        "rewriteTranscript": true,
-        "maxInternalContextChars": 800,
-        "maxConversationWrapperBodyChars": 1600
+        "config": {
+          "telemetryPath": "~/.openclaw/logs/context-engine/stable-prefix.jsonl",
+          "dedupeControlMessages": true,
+          "largeBlockChars": 1200,
+          "minConfidenceToReorder": 0.2,
+          "maxInternalContextChars": 800,
+          "maxConversationWrapperBodyChars": 1600
+        }
       }
     }
   }
 }
 ```
 
-### Config fields
+### Fields
 
 - `telemetryPath`
-  Optional JSONL sink path. If omitted, telemetry is disabled.
+  Optional JSONL sink for prompt-stability telemetry.
 - `dedupeControlMessages`
-  When enabled, repeated canonical control messages are collapsed.
-- `rewriteTranscript`
-  When enabled, `maintain()` asks the runtime to replace older wrapper-heavy
-  transcript entries with canonicalized forms.
+  Whether exact duplicate control messages should be collapsed during assembly.
+- `largeBlockChars`
+  Size threshold that increases the likelihood of a block being treated as a
+  `summarize_ok` candidate by the decision engine.
+- `minConfidenceToReorder`
+  Minimum confidence required before a non-fixed block is moved out of the
+  working prefix.
 - `maxInternalContextChars`
-  Upper bound for retained internal context detail.
+  Telemetry-only hint for very large internal-context blocks.
 - `maxConversationWrapperBodyChars`
-  Upper bound for retained conversation body text.
+  Telemetry-only hint for very large conversation-wrapper bodies.
 
 ## Install from local checkout
 
@@ -60,7 +85,23 @@ telemetry. It does not replace OpenClaw's built-in compaction algorithm.
 openclaw plugins install -l ./packages/openclaw-context-engine
 ```
 
-## Switching back
+## Validation flow
+
+Recommended validation loop:
+
+1. enable the adapter
+2. restart the gateway
+3. run real work in OpenClaw
+4. inspect the emitted telemetry with `prompt-stability-inspector`
+
+Example:
+
+```bash
+openclaw gateway restart
+prompt-stability-inspector ~/.openclaw/logs/context-engine/stable-prefix.jsonl --top 10
+```
+
+## Switching back to the legacy engine
 
 ```json
 {
@@ -71,4 +112,3 @@ openclaw plugins install -l ./packages/openclaw-context-engine
   }
 }
 ```
-

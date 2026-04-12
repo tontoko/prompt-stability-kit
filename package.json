@@ -11,8 +11,8 @@
   ],
   "scripts": {
     "build": "tsc -b packages/core packages/inspector packages/openclaw-context-engine",
-    "check": "npm run lint && npm run test && npm run build",
-    "clean": "rm -rf packages/*/dist coverage",
+    "check": "npm run lint && npm run build && npm run test",
+    "clean": "rm -rf packages/*/dist packages/*/*.tsbuildinfo coverage",
     "format": "ultracite fix .",
     "lint": "ultracite check .",
     "test": "vitest run"

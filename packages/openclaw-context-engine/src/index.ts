@@ -1,7 +1,6 @@
 import {
-  buildAssemblyPlan,
-  type CanonicalizedBlock,
-  computeFirstDivergence,
+  type AssembledBlock,
+  buildOptimizationPlan,
   type DiagnosticsSnapshot,
 } from "@tontoko/prompt-stability-core";
 import { loadConfig } from "openclaw/plugin-sdk/config-runtime";
@@ -12,8 +11,7 @@ import {
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 
 import { resolvePluginConfig } from "./config.js";
-import { canonicalBlocksToMessages } from "./convert.js";
-import { collectTranscriptRewrites } from "./maintain.js";
+import { assembledBlocksToMessages } from "./convert.js";
 import { normalizeMessages } from "./normalize.js";
 import { writeTelemetry } from "./telemetry.js";
 
@@ -26,26 +24,19 @@ type RuntimeContextLike = {
     };
     [key: string]: unknown;
   };
-  rewriteTranscriptEntries?: (request: {
-    replacements: Array<{
-      entryId: string;
-      message: Record<string, unknown>;
-    }>;
-  }) => Promise<{
-    changed: boolean;
-    bytesFreed: number;
-    rewrittenEntries: number;
-    reason?: string;
-  }>;
 };
 
 function buildSnapshot(params: {
-  blocks: CanonicalizedBlock[];
-  previousBlocks?: CanonicalizedBlock[];
+  blocks: AssembledBlock[];
+  previousBlocks?: AssembledBlock[];
   sessionId?: string;
   model?: string;
   estimatedChars: number;
   promptCache?: RuntimeContextLike["promptCache"];
+  sessionKey?: string;
+  agentId?: string;
+  decisionCounts?: DiagnosticsSnapshot["decisionCounts"];
+  firstDivergence?: DiagnosticsSnapshot["firstDivergence"];
 }): DiagnosticsSnapshot {
   const blockCounts = params.blocks.reduce<Record<string, number>>((acc, block) => {
     acc[block.kind] = (acc[block.kind] ?? 0) + 1;
@@ -56,10 +47,13 @@ function buildSnapshot(params: {
     timestamp: new Date().toISOString(),
     engineId: "stable-prefix-context",
     sessionId: params.sessionId,
+    sessionKey: params.sessionKey,
+    agentId: params.agentId,
     model: params.model,
     estimatedChars: params.estimatedChars,
     blockCounts,
-    firstDivergence: computeFirstDivergence(params.previousBlocks, params.blocks),
+    decisionCounts: params.decisionCounts,
+    firstDivergence: params.firstDivergence,
     promptCache: params.promptCache,
   };
 }
@@ -71,7 +65,7 @@ export default definePluginEntry({
   kind: "context-engine",
   register(api) {
     api.registerContextEngine("stable-prefix-context", () => {
-      let previousBlocks: CanonicalizedBlock[] | undefined;
+      let previousBlocks: AssembledBlock[] | undefined;
 
       return {
         info: {
@@ -87,19 +81,35 @@ export default definePluginEntry({
         async assemble(params) {
           const cfg = resolvePluginConfig(loadConfig().plugins?.entries?.["stable-prefix-context"]);
           const normalized = normalizeMessages(params.messages);
-          const plan = buildAssemblyPlan(normalized, cfg);
+          const plan = buildOptimizationPlan({
+            blocks: normalized,
+            previousBlocks: previousBlocks?.map((block) => ({
+              stableId: block.stableId,
+              hash: block.hash,
+              kind: block.kind,
+            })),
+            config: cfg,
+          });
+          const decisionCounts = plan.decisions.reduce<Record<string, number>>((acc, decision) => {
+            acc[decision.decision] = (acc[decision.decision] ?? 0) + 1;
+            return acc;
+          }, {});
           const snapshot = buildSnapshot({
             blocks: plan.blocks,
             previousBlocks,
             sessionId: params.sessionId,
+            sessionKey: (params as { sessionKey?: string }).sessionKey,
+            agentId: (params as { agentId?: string }).agentId,
             model: params.model,
             estimatedChars: plan.estimatedChars,
+            decisionCounts,
+            firstDivergence: plan.firstDivergence,
           });
           previousBlocks = plan.blocks;
           await writeTelemetry(cfg.telemetryPath, snapshot);
 
           return {
-            messages: canonicalBlocksToMessages(plan.blocks),
+            messages: assembledBlocksToMessages(plan.blocks),
             estimatedTokens: Math.ceil(plan.estimatedChars / 4),
             systemPromptAddition: buildMemorySystemPromptAddition({
               availableTools: params.availableTools ?? new Set<string>(),
@@ -109,29 +119,13 @@ export default definePluginEntry({
         },
 
         async maintain(params) {
-          const cfg = resolvePluginConfig(loadConfig().plugins?.entries?.["stable-prefix-context"]);
-          if (
-            !cfg.rewriteTranscript ||
-            typeof params.runtimeContext?.rewriteTranscriptEntries !== "function"
-          ) {
-            return {
-              changed: false,
-              bytesFreed: 0,
-              rewrittenEntries: 0,
-              reason: "rewrite-disabled",
-            };
-          }
-          const replacements = await collectTranscriptRewrites({
-            sessionFile: params.sessionFile,
-            policy: {
-              maxConversationWrapperBodyChars: cfg.maxConversationWrapperBodyChars,
-              maxInternalContextChars: cfg.maxInternalContextChars,
-            },
-          });
-          if (replacements.length === 0) {
-            return { changed: false, bytesFreed: 0, rewrittenEntries: 0, reason: "no-candidates" };
-          }
-          return await params.runtimeContext.rewriteTranscriptEntries({ replacements });
+          void params;
+          return {
+            changed: false,
+            bytesFreed: 0,
+            rewrittenEntries: 0,
+            reason: "reordering-only",
+          };
         },
 
         async afterTurn(params) {
@@ -140,6 +134,8 @@ export default definePluginEntry({
             timestamp: new Date().toISOString(),
             engineId: "stable-prefix-context",
             sessionId: params.sessionId,
+            sessionKey: (params as { sessionKey?: string }).sessionKey,
+            agentId: (params as { agentId?: string }).agentId,
             estimatedChars: 0,
             blockCounts: {},
             promptCache: params.runtimeContext?.promptCache,

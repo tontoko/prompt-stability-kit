@@ -1,7 +1,7 @@
 {
   "id": "stable-prefix-context",
   "name": "Stable Prefix Context",
-  "description": "OpenClaw context engine that canonicalizes volatile wrappers and emits prompt-stability diagnostics.",
+  "description": "OpenClaw context engine that detects divergence, preserves stable prefixes, and reorders volatile blocks into a suffix.",
   "kind": "context-engine",
   "configSchema": {
     "type": "object",
@@ -14,22 +14,27 @@
       "dedupeControlMessages": {
         "type": "boolean",
         "default": true,
-        "description": "Collapse repeated canonical control messages."
+        "description": "Collapse repeated control messages before optimization."
       },
-      "rewriteTranscript": {
-        "type": "boolean",
-        "default": true,
-        "description": "Rewrite older wrapper-heavy transcript entries into canonical form."
+      "largeBlockChars": {
+        "type": "number",
+        "default": 1200,
+        "description": "Blocks at or above this size become summarize candidates when their decision engine allows it."
+      },
+      "minConfidenceToReorder": {
+        "type": "number",
+        "default": 0.2,
+        "description": "Minimum decision confidence required before a non-prefix block is moved out of the working prefix."
       },
       "maxInternalContextChars": {
         "type": "number",
         "default": 800,
-        "description": "Maximum internal runtime context characters to retain after canonicalization."
+        "description": "Telemetry-only hint for large internal context blocks."
       },
       "maxConversationWrapperBodyChars": {
         "type": "number",
         "default": 1600,
-        "description": "Maximum conversation wrapper body characters to retain after canonicalization."
+        "description": "Telemetry-only hint for large conversation wrappers."
       }
     }
   }

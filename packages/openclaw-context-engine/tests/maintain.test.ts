@@ -1,19 +1,23 @@
 import { describe, expect, it } from "vitest";
 
-import { collectTranscriptRewrites } from "../src/maintain.js";
+import { normalizeMessages } from "../src/normalize.js";
 
-describe("collectTranscriptRewrites", () => {
-  it("finds canonicalizable wrapper-heavy transcript entries", async () => {
-    const file = new URL("./fixtures/session.jsonl", import.meta.url);
-    const rewrites = await collectTranscriptRewrites({
-      sessionFile: file,
-      policy: {
-        maxConversationWrapperBodyChars: 1600,
-        maxInternalContextChars: 800,
+describe("normalizeMessages", () => {
+  it("splits sender metadata wrappers into suffix metadata and prefix body blocks", () => {
+    const blocks = normalizeMessages([
+      {
+        id: "msg-1",
+        role: "user",
+        content:
+          'Sender (untrusted metadata):\n```json\n{"label":"cli","id":"cli"}\n```\n\n[Sun 2026-04-12 22:54 GMT+9] Reply with exactly: smoke-ok',
       },
-      preserveTailMessages: 0,
-    });
-    expect(rewrites.length).toBeGreaterThan(0);
-    expect(rewrites[0]?.entryId).toBe("msg-1");
+    ]);
+
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]?.kind).toBe("conversation_wrapper");
+    expect(blocks[0]?.positionConstraint).toBe("suffix_candidate");
+    expect(blocks[1]?.kind).toBe("stable_user");
+    expect(blocks[1]?.positionConstraint).toBe("prefix_candidate");
+    expect(blocks[1]?.text).toContain("Reply with exactly: smoke-ok");
   });
 });

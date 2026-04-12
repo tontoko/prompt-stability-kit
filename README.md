@@ -1,65 +1,115 @@
 # prompt-stability-kit
 
-`prompt-stability-kit` is a public monorepo for cache-friendly prompt assembly.
-It is built around a generic stable-prefix core plus an official OpenClaw
-context-engine adapter.
+`prompt-stability-kit` is a monorepo for improving prompt-cache hit rates in
+agent harnesses.
 
-The goal is not generic summarization. The goal is to maximize stable prompt
-prefixes, shrink volatile wrappers, and make cache breakpoints observable.
-
-## Packages
+It has two parts:
 
 - `@tontoko/prompt-stability-core`
-  Harness-agnostic classification, canonicalization, assembly planning, and
-  divergence diagnostics.
+  A harness-agnostic stable-prefix optimizer core.
 - `@tontoko/openclaw-stable-prefix-context`
-  Official OpenClaw context-engine adapter plugin built on the core package.
-- `@tontoko/prompt-stability-inspector`
-  CLI utilities for telemetry inspection and divergence summaries.
+  The official OpenClaw adapter built on top of the core.
 
-## Initial focus
+The repository is not a generic summarization toolkit. Its purpose is narrower:
 
-The v0 focus is the wrapper churn that most often breaks prompt caches in
-long-lived OpenClaw sessions:
+- detect where prompt prefixes start diverging
+- decide what must stay in the fixed prefix
+- move volatile blocks later when safe
+- keep assembly deterministic
+- measure the effect with real telemetry
 
-- conversation metadata wrappers
-- internal runtime context blocks
-- scheduled reminders
-- async exec notices
+## Architecture
 
-The adapter canonicalizes those payloads into shorter, deterministic forms and
-emits telemetry that makes cache breaks inspectable turn by turn.
+The target architecture is:
+
+1. Normalize harness messages into stable blocks.
+2. Compare the previous and current prompt candidates block by block.
+3. Detect the first divergence and inspect the surrounding window.
+4. Classify candidate blocks with confidence-aware decisions.
+5. Reorder blocks deterministically around fixed prefix boundaries.
+6. Emit telemetry that can be inspected against real sessions.
+
+The key design principle is that cache-hit optimization is primarily a
+**placement problem**, not a rewriting problem. The optimizer tries to preserve
+exact prefix identity for as long as possible.
+
+See [docs/DESIGN.md](./docs/DESIGN.md) for the full design.
 
 ## Repository layout
 
 ```text
 packages/
-  core/                     generic stable-prefix policy engine
-  openclaw-context-engine/  official OpenClaw adapter plugin
-  inspector/                diagnostics CLI
+  core/                     stable-prefix optimizer core
+  openclaw-context-engine/  official OpenClaw adapter
+  inspector/                telemetry CLI for real-session analysis
 docs/
   DESIGN.md
   OPENCLAW-ADAPTER.md
   TELEMETRY.md
 ```
 
-## Development
+## Packages
+
+### `@tontoko/prompt-stability-core`
+
+The core owns:
+
+- block normalization contracts
+- fixed-prefix boundaries
+- first-divergence detection
+- confidence-aware decision schema
+- deterministic ordering plans
+- telemetry types shared across adapters
+
+The core does not own:
+
+- transcript persistence
+- harness lifecycle hooks
+- provider SDKs
+
+### `@tontoko/openclaw-stable-prefix-context`
+
+The OpenClaw adapter owns:
+
+- OpenClaw context-engine registration
+- message normalization into core blocks
+- adapter-specific telemetry wiring
+- adapter-specific install and runtime configuration
+
+The adapter does not redefine the core policy model. It is intentionally thin.
+
+### `@tontoko/prompt-stability-inspector`
+
+The inspector is a CLI for real-session validation. It summarizes:
+
+- cache-read ratios by session
+- divergence hotspots
+- decision counts
+- sessions consuming the most prompt tokens
+
+## Inspector usage
 
 ```bash
-npm install
-npm run check
+prompt-stability-inspector ~/.openclaw/logs/context-engine/stable-prefix.jsonl
 ```
 
-## Local OpenClaw install
+Useful options:
 
-This repo is intentionally laid out so the adapter can be installed directly
-from the package directory:
+```bash
+prompt-stability-inspector telemetry.jsonl --top 10
+prompt-stability-inspector telemetry.jsonl --session <session-id>
+prompt-stability-inspector telemetry.jsonl --json
+```
+
+## OpenClaw install
+
+Install the adapter from a local checkout:
 
 ```bash
 openclaw plugins install -l ./packages/openclaw-context-engine
 ```
 
-Then set:
+Then enable it in `~/.openclaw/openclaw.json`:
 
 ```json
 {
@@ -69,13 +119,22 @@ Then set:
     },
     "entries": {
       "stable-prefix-context": {
-        "enabled": true
+        "enabled": true,
+        "config": {
+          "telemetryPath": "~/.openclaw/logs/context-engine/stable-prefix.jsonl"
+        }
       }
     }
   }
 }
 ```
 
-See [docs/OPENCLAW-ADAPTER.md](./docs/OPENCLAW-ADAPTER.md) for the full config
-surface and telemetry settings.
+See [docs/OPENCLAW-ADAPTER.md](./docs/OPENCLAW-ADAPTER.md) for the adapter
+contract and [docs/TELEMETRY.md](./docs/TELEMETRY.md) for the telemetry format.
 
+## Development
+
+```bash
+npm install
+npm run check
+```

@@ -1,97 +1,121 @@
 # Design
 
-## Problem
+## Problem statement
 
-Prompt-cache misses in long-lived agent sessions are often caused by small
-volatile wrapper changes near the front of the assembled prompt. The expensive
-failures are not average misses; they are large severe misses where a long
-conversation prefix is rebuilt because a metadata-heavy control block changed.
+Prompt caches fail when the front of the prompt stops matching exactly. In
+long-lived agent sessions, the expensive misses are usually caused by small but
+volatile blocks appearing too early in the assembled prompt:
 
-For OpenClaw, the first concrete targets are:
+- runtime wrappers
+- reminders
+- internal task completion events
+- transient tool outputs
+- metadata-heavy conversation envelopes
 
-- `Conversation info (untrusted metadata): ...`
-- `<<<BEGIN_OPENCLAW_INTERNAL_CONTEXT>>> ...`
-- scheduled reminder prompts
-- async exec completion notices
+The system should optimize for **stable prefix reuse**, not generic prompt
+compression.
+
+## Product shape
+
+The repository is split into:
+
+- a harness-agnostic optimizer core
+- adapter packages that map harness-specific transcripts into the core
+- telemetry and inspection tools for validating the effect in real sessions
 
 ## Design goals
 
-1. Keep the stable prompt prefix as byte-stable as possible.
-2. Reduce volatile wrapper payloads without hiding their semantics.
-3. Make the first divergence inspectable.
-4. Keep the policy engine reusable outside OpenClaw.
+1. Maximize exact prefix reuse.
+2. Keep fixed prefix boundaries explicit.
+3. Detect the first divergence deterministically.
+4. Make block decisions confidence-aware.
+5. Keep final prompt assembly deterministic.
+6. Measure the effect with real-session telemetry.
 
-## Monorepo split
+## Non-goals
 
-### `@tontoko/prompt-stability-core`
+- freeform prompt rewriting
+- transcript rewriting as a primary strategy
+- generic summarization quality optimization
+- provider-specific hacks baked into the core
 
-Owns:
+## Core concepts
 
-- message block classification
-- deterministic canonicalization
-- assembly planning
-- divergence analysis
-- telemetry shape
+### Fixed prefix boundary
 
-Does not own:
+Some blocks should be outside the optimizer's discretion and always remain in
+front:
 
-- transcript storage
-- vendor-specific plugin lifecycle
-- transport APIs
+- system/core policy
+- stable tool inventory
+- persistent workspace constraints
 
-### `@tontoko/openclaw-stable-prefix-context`
+The optimizer should not "get smart" about these blocks. They define the stable
+frontier that everything else must respect.
 
-Owns:
+### First divergence
 
-- OpenClaw plugin manifest and slot integration
-- context-engine lifecycle wiring
-- OpenClaw message normalization
-- transcript rewrite requests
-- telemetry emission to JSONL
+The core compares the previous prompt candidate and the current one block by
+block. The first place where hashes differ defines the first divergence. That
+point and a small window after it become the optimization target.
 
-Does not own:
+### Decision schema
 
-- harness-agnostic policy
-- generic diagnostics formats
+Each candidate block is classified into one of the following outcomes:
 
-## Strategy
+- `prefix_required`
+- `suffix_ok`
+- `summarize_ok`
+- `drop_ok`
 
-The initial strategy is conservative.
+The core may use several decision sources, but the final decision must be
+deterministic and confidence-aware.
 
-We do not reorder the full transcript aggressively in v0. We canonicalize the
-most volatile wrapper messages first, optionally dedupe exact repeats, and make
-those rewrites durable through the runtime transcript rewrite helper.
+### Confidence-aware decisions
 
-This makes the first cache-sensitive prefix blocks smaller and more stable
-without risking chronology-breaking reorder behavior.
+The intended decision stack is:
 
-## Assembly flow
+1. hard constraints
+2. rule-based classification
+3. heuristic scoring
+4. statistical classifier
+5. optional LLM arbiter for low-confidence cases
 
-1. Normalize incoming messages into `NormalizedBlock` entries.
-2. Classify each block with a stable `kind`.
-3. Canonicalize supported volatile kinds to short deterministic text.
-4. Apply exact-repeat dedupe for reminder-like control blocks.
-5. Return assembled messages in original order, but with canonicalized content.
-6. Emit a diagnostics snapshot with block hashes and first-divergence data.
+The LLM, when used, is a judge and not a rewriter.
 
-## Maintenance flow
+## Assembly model
 
-`maintain()` is where durable stability work happens.
+The final prompt should be assembled in deterministic layers:
 
-The adapter requests transcript rewrites for older messages when canonicalized
-content differs from the stored payload. That keeps future turns from repeatedly
-paying to process verbose wrappers that are no longer needed in full.
+1. fixed prefix
+2. stable working prefix
+3. active turn context
+4. volatile suffix
+5. optional summary/reference sidecars
 
-## Why not full prompt rewriting?
+The primary optimization mechanism is **moving volatile blocks later before the
+prompt is sent**. Summary/reference sidecars are only a secondary mechanism for
+preventing future churn after an unavoidable miss.
 
-Freeform LLM rewriting is explicitly out of scope for v0 because it would add
-fresh variability to the prefix. The system is designed around deterministic
-transforms first.
+## Telemetry model
 
-## Future work
+The runtime should emit enough data to answer:
 
-- suffix routing for highly volatile blocks
-- optional classifier-assisted decisions
-- richer prompt-boundary diagnostics
-- additional adapters beyond OpenClaw
+- where the first divergence occurred
+- which block kind caused it
+- which decisions were made
+- how much cache-read was achieved
+- which sessions are consuming the most prompt tokens
 
+This telemetry is designed for real-session evaluation, not synthetic demos.
+
+## OpenClaw adapter
+
+The OpenClaw adapter is intentionally thin:
+
+- normalize OpenClaw messages into core blocks
+- feed them to the optimizer core
+- emit telemetry
+- expose adapter configuration
+
+It should not own a separate policy model from the core.

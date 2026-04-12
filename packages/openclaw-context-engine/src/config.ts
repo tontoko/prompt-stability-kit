@@ -4,7 +4,8 @@ import type { CorePolicyConfig } from "@tontoko/prompt-stability-core";
 
 export type StablePrefixPluginConfig = CorePolicyConfig & {
   telemetryPath?: string;
-  rewriteTranscript?: boolean;
+  maxInternalContextChars?: number;
+  maxConversationWrapperBodyChars?: number;
 };
 
 export function resolvePluginConfig(raw: unknown): StablePrefixPluginConfig {
@@ -18,14 +19,15 @@ export function resolvePluginConfig(raw: unknown): StablePrefixPluginConfig {
       typeof value.telemetryPath === "string" ? expandHome(value.telemetryPath) : undefined,
     dedupeControlMessages:
       typeof value.dedupeControlMessages === "boolean" ? value.dedupeControlMessages : true,
-    rewriteTranscript:
-      typeof value.rewriteTranscript === "boolean" ? value.rewriteTranscript : true,
     maxInternalContextChars:
       typeof value.maxInternalContextChars === "number" ? value.maxInternalContextChars : 800,
     maxConversationWrapperBodyChars:
       typeof value.maxConversationWrapperBodyChars === "number"
         ? value.maxConversationWrapperBodyChars
         : 1600,
+    largeBlockChars: typeof value.largeBlockChars === "number" ? value.largeBlockChars : 1200,
+    minConfidenceToReorder:
+      typeof value.minConfidenceToReorder === "number" ? value.minConfidenceToReorder : 0.2,
   };
 }
 
