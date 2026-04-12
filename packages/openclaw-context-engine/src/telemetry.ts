@@ -1,5 +1,6 @@
 import { appendFile, mkdir } from "node:fs/promises";
-import { dirname } from "node:path";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 
 import type { DiagnosticsSnapshot } from "@tontoko/prompt-stability-core";
 
@@ -8,6 +9,8 @@ export async function writeTelemetry(
   payload: DiagnosticsSnapshot,
 ): Promise<void> {
   if (!path) return;
-  await mkdir(dirname(path), { recursive: true });
-  await appendFile(path, `${JSON.stringify(payload)}\n`, "utf8");
+  const resolvedPath =
+    path === "~" ? homedir() : path.startsWith("~/") ? join(homedir(), path.slice(2)) : path;
+  await mkdir(dirname(resolvedPath), { recursive: true });
+  await appendFile(resolvedPath, `${JSON.stringify(payload)}\n`, "utf8");
 }
