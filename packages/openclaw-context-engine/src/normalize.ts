@@ -8,6 +8,10 @@ type AnyMessage = {
   toolName?: string;
 };
 
+export type NormalizedOpenClawBlock = NormalizedBlock & {
+  originalMessage: AnyMessage;
+};
+
 function normalizeRole(input: string | undefined): PromptStabilityRole {
   if (input === "system" || input === "user" || input === "assistant" || input === "tool") {
     return input;
@@ -32,7 +36,7 @@ function stringifyContent(content: unknown): string {
   return String(content ?? "");
 }
 
-export function normalizeMessages(messages: unknown[]): NormalizedBlock[] {
+export function normalizeMessages(messages: unknown[]): NormalizedOpenClawBlock[] {
   return messages.map((message, index) => {
     const value = (message ?? {}) as AnyMessage;
     const role = normalizeRole(value.role);
@@ -46,6 +50,7 @@ export function normalizeMessages(messages: unknown[]): NormalizedBlock[] {
     return {
       ...base,
       kind: classifyBlock(base),
+      originalMessage: value,
     };
   });
 }
