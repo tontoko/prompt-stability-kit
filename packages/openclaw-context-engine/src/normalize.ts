@@ -112,7 +112,7 @@ function splitConversationWrapper(text: string): { wrapper: string; body: string
     if (wrapper && body) return { wrapper, body };
   }
 
-  if (text.startsWith("Sender (untrusted metadata):")) {
+  if (text.startsWith("Sender (untrusted metadata):") || text.startsWith("Sender info:")) {
     const firstFence = text.indexOf("```");
     if (firstFence >= 0) {
       const secondFence = text.indexOf("```", firstFence + 3);
@@ -124,7 +124,10 @@ function splitConversationWrapper(text: string): { wrapper: string; body: string
     }
   }
 
-  if (text.startsWith("Conversation info (untrusted metadata):")) {
+  if (
+    text.startsWith("Conversation info (untrusted metadata):") ||
+    text.startsWith("Conversation info:")
+  ) {
     const fenceIndices: number[] = [];
     let from = 0;
     while (true) {
