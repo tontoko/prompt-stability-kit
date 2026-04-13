@@ -3,6 +3,10 @@
 This document lists the highest-value **lossless** prompt-compaction targets in
 OpenClaw core, based on real-session analysis.
 
+The patches described here apply to the **installed OpenClaw runtime bundle**
+under `dist/`, not to this repository's source packages. They are local,
+version-sensitive patches that should be reapplied after OpenClaw upgrades.
+
 The goal is not transcript rewriting. The goal is to reduce the size of
 **injected runtime/control-plane text** that lands in the uncached tail or, in
 some cases, before the stable frontier.
@@ -198,6 +202,8 @@ Use these tools after each patch:
 prompt-stability-surfaces <session...>
 prompt-stability-compare --baseline <old...> --candidate <new...>
 prompt-stability-inspector ~/.openclaw/logs/context-engine/stable-prefix.jsonl
+npm run openclaw:patch-core
+npm run openclaw:verify-core
 ```
 
 Success means:
