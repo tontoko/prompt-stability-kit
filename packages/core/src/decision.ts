@@ -255,14 +255,38 @@ export function decideBlocks(params: {
 }): BlockDecision[] {
   const config = params.config ?? {};
   const fixedPrefixBoundary = computeFixedPrefixBoundary(params.blocks, config);
+  const lookahead = config.divergenceLookahead ?? 4;
+  const divergenceIndex = params.firstDivergence?.index;
+  const hasWindow = typeof divergenceIndex === "number" && divergenceIndex >= 0;
+  const windowStart = divergenceIndex ?? Number.POSITIVE_INFINITY;
+  const windowEnd = hasWindow ? windowStart + lookahead : Number.NEGATIVE_INFINITY;
 
-  return params.blocks.map((block) => {
+  return params.blocks.map((block, index) => {
     const hardDecision = hardConstraintDecision({
       block,
       config,
       fixedPrefixBoundaryIndex: fixedPrefixBoundary.index,
     });
     if (hardDecision) return hardDecision;
+
+    if (hasWindow && (index < windowStart || index > windowEnd)) {
+      return {
+        blockId: block.id,
+        stableId: block.stableId,
+        decision: "prefix_required",
+        confidence: 1,
+        locked: false,
+        reasons: ["outside-divergence-window"],
+        region: "working_prefix",
+        scores: {
+          prefixRequired: 1,
+          suffixOk: 0,
+          summarizeOk: 0,
+          dropOk: 0,
+        },
+      };
+    }
+
     return heuristicDecision({
       block,
       config,

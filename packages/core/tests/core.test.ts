@@ -96,4 +96,55 @@ describe("prompt-stability core", () => {
     expect(plan.summaryCandidates[0].assembledText).toBe(plan.summaryCandidates[0].text);
     expect(plan.decisions[0].decision).toBe("summarize_ok");
   });
+
+  it("only optimizes blocks within the divergence lookahead window", () => {
+    const previous = buildAssemblyPlan([
+      block({ id: "system", role: "system", originalIndex: 0, text: "core", kind: "system_core" }),
+      block({ id: "user-1", originalIndex: 1, text: "keep me", kind: "stable_user" }),
+      block({
+        id: "wrapper-1",
+        originalIndex: 2,
+        text: "Conversation info (untrusted metadata):\nMessage body:\nold",
+      }),
+      block({
+        id: "wrapper-2",
+        originalIndex: 3,
+        text: "System: [scheduler] A scheduled reminder has been triggered. Tasklist reminder",
+        kind: "system_reminder",
+      }),
+    ]);
+    const current = buildOptimizationPlan({
+      blocks: [
+        block({
+          id: "system",
+          role: "system",
+          originalIndex: 0,
+          text: "core",
+          kind: "system_core",
+        }),
+        block({ id: "user-1", originalIndex: 1, text: "keep me", kind: "stable_user" }),
+        block({
+          id: "wrapper-1",
+          originalIndex: 2,
+          text: "Conversation info (untrusted metadata):\nMessage body:\nnew",
+        }),
+        block({
+          id: "wrapper-2",
+          originalIndex: 3,
+          text: "System: [scheduler] A scheduled reminder has been triggered. Tasklist reminder",
+          kind: "system_reminder",
+        }),
+      ],
+      previousBlocks: previous.blocks,
+      config: { divergenceLookahead: 0 },
+    });
+
+    expect(current.firstDivergence?.index).toBe(2);
+    expect(current.decisions.find((entry) => entry.blockId === "wrapper-1")?.decision).toBe(
+      "suffix_ok",
+    );
+    expect(current.decisions.find((entry) => entry.blockId === "wrapper-2")?.decision).toBe(
+      "prefix_required",
+    );
+  });
 });

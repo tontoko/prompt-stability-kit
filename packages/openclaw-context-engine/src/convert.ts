@@ -3,17 +3,19 @@ import type { AssembledBlock } from "@tontoko/prompt-stability-core";
 
 type AssembledOpenClawBlock = AssembledBlock & {
   originalMessage?: Record<string, unknown>;
-  toMessage?: () => AgentMessage;
+  toMessages?: () => AgentMessage[];
 };
 
 export function assembledBlocksToMessages(blocks: AssembledOpenClawBlock[]): AgentMessage[] {
-  return blocks.map((block) => {
-    if (typeof block.toMessage === "function") {
-      return block.toMessage();
+  return blocks.flatMap((block) => {
+    if (typeof block.toMessages === "function") {
+      return block.toMessages();
     }
-    return {
-      role: block.role === "other" ? "user" : block.role,
-      content: block.assembledText,
-    } as AgentMessage;
+    return [
+      {
+        role: block.role === "other" ? "user" : block.role,
+        content: block.assembledText,
+      } as AgentMessage,
+    ];
   });
 }

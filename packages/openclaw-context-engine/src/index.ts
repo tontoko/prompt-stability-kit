@@ -8,6 +8,7 @@ import { delegateCompactionToRuntime } from "openclaw/plugin-sdk/core";
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 
 import { resolvePluginConfig } from "./config.js";
+import { assembledBlocksToMessages } from "./convert.js";
 import { normalizeMessages } from "./normalize.js";
 import { writeTelemetry } from "./telemetry.js";
 
@@ -105,7 +106,7 @@ export default definePluginEntry({
           await writeTelemetry(cfg.telemetryPath, snapshot);
 
           return {
-            messages: params.messages,
+            messages: assembledBlocksToMessages(plan.blocks),
             estimatedTokens: Math.ceil(plan.estimatedChars / 4),
           };
         },

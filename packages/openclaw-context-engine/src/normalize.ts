@@ -12,7 +12,7 @@ type AnyMessage = {
 
 export type NormalizedOpenClawBlock = NormalizedBlock & {
   originalMessage: AnyMessage;
-  toMessage: () => AgentMessage;
+  toMessages: () => AgentMessage[];
 };
 
 function normalizeRole(input: string | undefined): PromptStabilityRole {
@@ -49,18 +49,18 @@ function stringifyContent(content: unknown): string {
   return String(content ?? "");
 }
 
-function toTextParts(text: string): Array<{ type: "text"; text: string }> {
-  return [{ type: "text", text }];
-}
-
-function buildMessage(value: AnyMessage, role: PromptStabilityRole, text: string): AgentMessage {
-  const next: Record<string, unknown> = { ...value, role: role === "other" ? "user" : role };
-  if (Array.isArray(value.content)) {
-    next.content = toTextParts(text);
-  } else {
-    next.content = text;
-  }
-  return next as unknown as AgentMessage;
+function buildTextMessage(
+  value: AnyMessage,
+  role: PromptStabilityRole,
+  text: string,
+  id: string,
+): AgentMessage {
+  return {
+    ...value,
+    id,
+    role: role === "other" ? "user" : role,
+    content: text,
+  } as unknown as AgentMessage;
 }
 
 function splitConversationWrapper(text: string): { wrapper: string; body: string } | undefined {
@@ -97,6 +97,7 @@ function makeBlock(params: {
   source?: string;
   positionConstraint?: NormalizedBlock["positionConstraint"];
   kind?: NormalizedBlock["kind"];
+  toMessages?: () => AgentMessage[];
 }): NormalizedOpenClawBlock {
   const base = {
     id: params.id,
@@ -112,7 +113,7 @@ function makeBlock(params: {
     ...base,
     kind: params.kind ?? classifyBlock(base),
     originalMessage: params.value,
-    toMessage: () => buildMessage(params.value, params.role, params.text),
+    toMessages: params.toMessages ?? (() => [params.value as unknown as AgentMessage]),
   };
 }
 
@@ -122,7 +123,8 @@ export function normalizeMessages(messages: unknown[]): NormalizedOpenClawBlock[
     const role = normalizeRole(value.role);
     const text = stringifyContent(value.content);
     const id = typeof value.id === "string" ? value.id : `message-${index}`;
-    const split = splitConversationWrapper(text);
+    const split =
+      typeof value.content === "string" ? splitConversationWrapper(value.content) : undefined;
 
     if (split) {
       return [
@@ -136,6 +138,7 @@ export function normalizeMessages(messages: unknown[]): NormalizedOpenClawBlock[
           source: "conversation_wrapper",
           positionConstraint: "suffix_candidate",
           kind: "conversation_wrapper",
+          toMessages: () => [buildTextMessage(value, role, split.wrapper, `${id}:wrapper`)],
         }),
         makeBlock({
           value,
@@ -155,6 +158,7 @@ export function normalizeMessages(messages: unknown[]): NormalizedOpenClawBlock[
                   originalIndex: index,
                   text: split.body,
                 }),
+          toMessages: () => [buildTextMessage(value, role, split.body, `${id}:body`)],
         }),
       ];
     }
