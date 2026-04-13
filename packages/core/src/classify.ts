@@ -10,8 +10,8 @@ export function classifyBlock(block: Omit<NormalizedBlock, "kind">): PromptStabi
   if (block.role === "assistant") return "assistant_turn";
   if (block.role === "tool") return "tool_result";
   if (text.startsWith(CONVERSATION_WRAPPER_PREFIX)) return "conversation_wrapper";
-  if (text.startsWith(INTERNAL_CONTEXT_PREFIX)) return "internal_runtime_event";
-  if (text.startsWith(QUEUED_MESSAGES_PREFIX)) return "queued_messages";
+  if (text.includes(INTERNAL_CONTEXT_PREFIX)) return "internal_runtime_event";
+  if (text.includes(QUEUED_MESSAGES_PREFIX)) return "queued_messages";
   if (
     text.startsWith("System: [") &&
     text.includes("Tasklist reminder") &&

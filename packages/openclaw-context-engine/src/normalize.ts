@@ -1,5 +1,9 @@
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
-import type { NormalizedBlock, PromptStabilityRole } from "@tontoko/prompt-stability-core";
+import type {
+  CorePolicyConfig,
+  NormalizedBlock,
+  PromptStabilityRole,
+} from "@tontoko/prompt-stability-core";
 import { classifyBlock, defaultSliceabilityForKind } from "@tontoko/prompt-stability-core";
 
 type AnyMessage = {
@@ -151,6 +155,7 @@ function makeBlock(params: {
   positionConstraint?: NormalizedBlock["positionConstraint"];
   sliceability?: NormalizedBlock["sliceability"];
   kind?: NormalizedBlock["kind"];
+  config?: CorePolicyConfig;
   toMessages?: () => AgentMessage[];
 }): NormalizedOpenClawBlock {
   const base = {
@@ -169,13 +174,16 @@ function makeBlock(params: {
   return {
     ...base,
     kind,
-    sliceability: params.sliceability ?? defaultSliceabilityForKind(kind),
+    sliceability: params.sliceability ?? defaultSliceabilityForKind(kind, params.config),
     originalMessage: params.value,
     toMessages: params.toMessages ?? (() => [params.value as unknown as AgentMessage]),
   };
 }
 
-export function normalizeMessages(messages: unknown[]): NormalizedOpenClawBlock[] {
+export function normalizeMessages(
+  messages: unknown[],
+  config: CorePolicyConfig = {},
+): NormalizedOpenClawBlock[] {
   return messages.flatMap((message, index) => {
     const value = (message ?? {}) as AnyMessage;
     const role = normalizeRole(value.role);
@@ -197,6 +205,7 @@ export function normalizeMessages(messages: unknown[]): NormalizedOpenClawBlock[
           positionConstraint: "suffix_candidate",
           sliceability: "lossless_split_child_movable",
           kind: "conversation_wrapper",
+          config,
           toMessages: () => [buildTextMessage(value, role, split.wrapper, `${id}:wrapper`)],
         }),
         makeBlock({
@@ -218,6 +227,7 @@ export function normalizeMessages(messages: unknown[]): NormalizedOpenClawBlock[
                   originalIndex: index,
                   text: split.body,
                 }),
+          config,
           toMessages: () => [buildTextMessage(value, role, split.body, `${id}:body`)],
         }),
       ];
@@ -230,6 +240,7 @@ export function normalizeMessages(messages: unknown[]): NormalizedOpenClawBlock[
       id,
       stableId: id,
       text,
+      config,
     });
 
     const volatileKinds = new Set([

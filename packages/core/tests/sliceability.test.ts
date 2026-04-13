@@ -3,13 +3,28 @@ import { describe, expect, it } from "vitest";
 import { defaultSliceabilityForKind, isPreFrontierMovableSliceability } from "../src/index.js";
 
 describe("sliceability matrix", () => {
-  it("marks only safe injected wrappers as pre-frontier movable by default", () => {
+  it("marks safe injected wrappers as pre-frontier movable by default", () => {
     expect(defaultSliceabilityForKind("conversation_wrapper")).toBe("lossless_whole_movable");
+    expect(defaultSliceabilityForKind("internal_runtime_event")).toBe("lossless_whole_movable");
     expect(defaultSliceabilityForKind("system_reminder")).toBe("lossless_whole_movable");
     expect(defaultSliceabilityForKind("async_exec_notice")).toBe("lossless_whole_movable");
-    expect(defaultSliceabilityForKind("internal_runtime_event")).toBe("future_only");
     expect(defaultSliceabilityForKind("queued_messages")).toBe("future_only");
     expect(defaultSliceabilityForKind("stable_user")).toBe("non_movable");
+  });
+
+  it("allows config to widen or narrow movable kinds", () => {
+    expect(
+      defaultSliceabilityForKind("queued_messages", {
+        losslessWholeMovableKinds: ["queued_messages"],
+        futureOnlyKinds: ["compaction_summary"],
+      }),
+    ).toBe("lossless_whole_movable");
+    expect(
+      defaultSliceabilityForKind("internal_runtime_event", {
+        losslessWholeMovableKinds: ["conversation_wrapper"],
+        futureOnlyKinds: ["internal_runtime_event", "queued_messages"],
+      }),
+    ).toBe("future_only");
   });
 
   it("treats split child slices as movable and future-only blocks as non-movable", () => {

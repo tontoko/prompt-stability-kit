@@ -1,20 +1,35 @@
-import type { BlockSliceability, PromptStabilityBlockKind } from "./types.js";
+import type { BlockSliceability, CorePolicyConfig, PromptStabilityBlockKind } from "./types.js";
 
-const PRE_FRONTIER_MOVABLE_KINDS = new Set<PromptStabilityBlockKind>([
+const DEFAULT_LOSSLESS_WHOLE_MOVABLE_KINDS = new Set<PromptStabilityBlockKind>([
   "conversation_wrapper",
+  "internal_runtime_event",
   "system_reminder",
   "async_exec_notice",
 ]);
 
-const FUTURE_ONLY_KINDS = new Set<PromptStabilityBlockKind>([
-  "internal_runtime_event",
+const DEFAULT_FUTURE_ONLY_KINDS = new Set<PromptStabilityBlockKind>([
   "queued_messages",
   "compaction_summary",
 ]);
 
-export function defaultSliceabilityForKind(kind: PromptStabilityBlockKind): BlockSliceability {
-  if (PRE_FRONTIER_MOVABLE_KINDS.has(kind)) return "lossless_whole_movable";
-  if (FUTURE_ONLY_KINDS.has(kind)) return "future_only";
+function resolveKindSet(
+  overrideKinds: PromptStabilityBlockKind[] | undefined,
+  fallbackKinds: Set<PromptStabilityBlockKind>,
+): Set<PromptStabilityBlockKind> {
+  return overrideKinds ? new Set<PromptStabilityBlockKind>(overrideKinds) : fallbackKinds;
+}
+
+export function defaultSliceabilityForKind(
+  kind: PromptStabilityBlockKind,
+  config: CorePolicyConfig = {},
+): BlockSliceability {
+  const losslessWholeMovableKinds = resolveKindSet(
+    config.losslessWholeMovableKinds,
+    DEFAULT_LOSSLESS_WHOLE_MOVABLE_KINDS,
+  );
+  const futureOnlyKinds = resolveKindSet(config.futureOnlyKinds, DEFAULT_FUTURE_ONLY_KINDS);
+  if (losslessWholeMovableKinds.has(kind)) return "lossless_whole_movable";
+  if (futureOnlyKinds.has(kind)) return "future_only";
   return "non_movable";
 }
 

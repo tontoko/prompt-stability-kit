@@ -119,8 +119,8 @@ For OpenClaw, the adapter should assume the following by default:
 - normal user messages are atomic unless a known wrapper format can be split
 - assistant messages are atomic unless proven otherwise
 - tool messages are atomic unless a specific adapter rule proves safe adjacency
-- runtime/internal wrappers are not movable in the runtime optimizer unless a
-  sliceability proof exists
+- runtime/internal wrappers are movable only when the adapter has an explicit,
+  lossless whole-block proof for that wrapper kind
 
 ## Invariants
 

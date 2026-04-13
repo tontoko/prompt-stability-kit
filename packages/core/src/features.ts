@@ -94,7 +94,7 @@ export function enrichBlock(
     stableId: block.stableId ?? block.id,
     stableHash: hashes.stableHash,
     semanticHash: hashes.semanticHash,
-    sliceability: block.sliceability ?? defaultSliceabilityForKind(block.kind),
+    sliceability: block.sliceability ?? defaultSliceabilityForKind(block.kind, config),
     features: buildBlockFeatures(block, config),
   };
 }

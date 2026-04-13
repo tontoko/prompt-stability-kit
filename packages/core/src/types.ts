@@ -145,6 +145,8 @@ export type CorePolicyConfig = {
   suffixCandidateKinds?: PromptStabilityBlockKind[];
   summarizeCandidateKinds?: PromptStabilityBlockKind[];
   dropCandidateKinds?: PromptStabilityBlockKind[];
+  losslessWholeMovableKinds?: PromptStabilityBlockKind[];
+  futureOnlyKinds?: PromptStabilityBlockKind[];
   largeBlockChars?: number;
   divergenceLookahead?: number;
   dedupeControlMessages?: boolean;

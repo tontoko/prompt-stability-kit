@@ -26,6 +26,52 @@
         "default": 3,
         "description": "Maximum contiguous injected-volatility blocks to move when the divergence is safely before the append boundary."
       },
+      "fixedPrefixKinds": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Optional override for block kinds that should always remain in the fixed prefix."
+      },
+      "suffixCandidateKinds": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Optional override for block kinds that are eligible for suffix placement in offline planning."
+      },
+      "summarizeCandidateKinds": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Optional override for block kinds that may be summarized after send."
+      },
+      "dropCandidateKinds": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Optional override for block kinds that may be dropped in offline planning."
+      },
+      "preFrontierInjectedKinds": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Optional override for runtime-detected injected-volatility block kinds."
+      },
+      "losslessWholeMovableKinds": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Optional override for block kinds that can be moved whole without rewriting content."
+      },
+      "futureOnlyKinds": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Optional override for block kinds that are only eligible for future-turn churn reduction, not current-turn movement."
+      },
+      "heuristicWeights": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "volatility": { "type": "number" },
+          "prefixValue": { "type": "number" },
+          "divergence": { "type": "number" },
+          "size": { "type": "number" }
+        },
+        "description": "Optional override for heuristic scoring weights used by the core decision engine."
+      },
       "runtimePolicyMode": {
         "type": "string",
         "enum": ["pre-frontier-injected-only", "off"],

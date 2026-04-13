@@ -86,4 +86,36 @@ describe("openclaw adapter normalization", () => {
     expect(Array.isArray(rebuilt[0]?.content)).toBe(true);
     expect(JSON.stringify(rebuilt[1]?.content)).toContain("hello from discord");
   });
+
+  it("marks internal runtime events as lossless whole movable by default", () => {
+    const blocks = normalizeMessages([
+      {
+        id: "msg-internal",
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: "[Mon 2026-04-13 13:04 GMT+9] <<<BEGIN_OPENCLAW_INTERNAL_CONTEXT>>>\nOpenClaw runtime context (internal):\n[Internal task completion event]\nsource: subagent\nstatus: completed successfully\n<<<END_OPENCLAW_INTERNAL_CONTEXT>>>",
+          },
+        ],
+      },
+    ]);
+
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]?.kind).toBe("internal_runtime_event");
+    expect(blocks[0]?.positionConstraint).toBe("suffix_candidate");
+    expect(blocks[0]?.sliceability).toBe("lossless_whole_movable");
+    expect(blocks[0]?.toMessages()).toEqual([
+      {
+        id: "msg-internal",
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: "[Mon 2026-04-13 13:04 GMT+9] <<<BEGIN_OPENCLAW_INTERNAL_CONTEXT>>>\nOpenClaw runtime context (internal):\n[Internal task completion event]\nsource: subagent\nstatus: completed successfully\n<<<END_OPENCLAW_INTERNAL_CONTEXT>>>",
+          },
+        ],
+      },
+    ]);
+  });
 });

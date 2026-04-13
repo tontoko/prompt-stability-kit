@@ -92,7 +92,7 @@ export default definePluginEntry({
             sessionId: params.sessionId,
             agentId,
           });
-          const normalized = normalizeMessages(params.messages);
+          const normalized = normalizeMessages(params.messages, cfg);
           const blocks = enrichBlocks(normalized, cfg);
           const runtimePolicy = computePreFrontierInjectionPolicy({
             blocks,

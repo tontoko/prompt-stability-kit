@@ -18,6 +18,7 @@ function block(
     stableId: input.stableId,
     source: input.source,
     positionConstraint: input.positionConstraint,
+    sliceability: input.sliceability,
     metadata: input.metadata,
   };
   return {
@@ -144,7 +145,7 @@ describe("pre-frontier runtime policy", () => {
     expect(reordered.map((block) => block.id)).toEqual(["system", "user", "assistant", "wrapper"]);
   });
 
-  it("does not move future-only injected volatility even when it causes divergence", () => {
+  it("moves internal runtime events when they are the only pre-frontier divergence", () => {
     const previous = enrichBlocks(
       [
         block({
@@ -181,7 +182,65 @@ describe("pre-frontier runtime policy", () => {
 
     const policy = computePreFrontierInjectionPolicy({
       blocks: current,
-      previousBlocks: previous,
+      previousBlocks: previous.map((block) => ({
+        stableId: block.stableId,
+        stableHash: block.stableHash,
+        kind: block.kind,
+      })),
+      config: {},
+    });
+
+    const reordered = applyPreFrontierInjectionPolicy(current, policy);
+
+    expect(policy.applied).toBe(true);
+    expect(policy.reason).toBe("pre-frontier-injected-window");
+    expect(policy.movedStableIds).toEqual(["internal"]);
+    expect(reordered.map((block) => block.id)).toEqual(["system", "user", "internal"]);
+  });
+
+  it("respects explicit future-only overrides for injected kinds", () => {
+    const previous = enrichBlocks(
+      [
+        block({
+          id: "system",
+          role: "system",
+          originalIndex: 0,
+          text: "core",
+          kind: "system_core",
+        }),
+        block({ id: "user", originalIndex: 1, text: "hello", kind: "stable_user" }),
+      ],
+      {},
+    );
+    const current = enrichBlocks(
+      [
+        block({
+          id: "system",
+          role: "system",
+          originalIndex: 0,
+          text: "core",
+          kind: "system_core",
+        }),
+        block({
+          id: "internal",
+          originalIndex: 1,
+          text: "<<<BEGIN_OPENCLAW_INTERNAL_CONTEXT>>>\nchild done\n<<<END_OPENCLAW_INTERNAL_CONTEXT>>>",
+          kind: "internal_runtime_event",
+          positionConstraint: "suffix_candidate",
+          sliceability: "future_only",
+        }),
+        block({ id: "user", originalIndex: 2, text: "hello", kind: "stable_user" }),
+      ],
+      {},
+    );
+
+    const policy = computePreFrontierInjectionPolicy({
+      blocks: current,
+      previousBlocks: previous.map((block) => ({
+        stableId: block.stableId,
+        stableHash: block.stableHash,
+        kind: block.kind,
+      })),
       config: {},
     });
 
