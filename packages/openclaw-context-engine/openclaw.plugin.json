@@ -1,7 +1,7 @@
 {
   "id": "stable-prefix-context",
   "name": "Stable Prefix Context",
-  "description": "OpenClaw context engine that detects divergence, preserves stable prefixes, and reorders volatile blocks into a suffix.",
+  "description": "OpenClaw context engine that only applies lossless pre-frontier injected-volatility movement when predicted prefix uplift is positive, and records prompt-cache telemetry.",
   "kind": "context-engine",
   "configSchema": {
     "type": "object",
@@ -21,10 +21,21 @@
         "default": 1200,
         "description": "Blocks at or above this size become summarize candidates when their decision engine allows it."
       },
+      "preFrontierInjectedWindowBlocks": {
+        "type": "number",
+        "default": 3,
+        "description": "Maximum contiguous injected-volatility blocks to move when the divergence is safely before the append boundary."
+      },
+      "runtimePolicyMode": {
+        "type": "string",
+        "enum": ["pre-frontier-injected-only", "off"],
+        "default": "pre-frontier-injected-only",
+        "description": "Runtime policy mode. The default only acts on pre-frontier injected volatility."
+      },
       "minConfidenceToReorder": {
         "type": "number",
         "default": 0.2,
-        "description": "Minimum decision confidence required before a non-prefix block is moved out of the working prefix."
+        "description": "Legacy compatibility field retained for older configs; runtime policy no longer uses confidence-based transcript-wide reordering."
       },
       "maxInternalContextChars": {
         "type": "number",

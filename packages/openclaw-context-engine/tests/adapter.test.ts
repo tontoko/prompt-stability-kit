@@ -18,8 +18,10 @@ describe("openclaw adapter normalization", () => {
     expect(blocks).toHaveLength(2);
     expect(blocks[0]?.kind).toBe("conversation_wrapper");
     expect(blocks[0]?.positionConstraint).toBe("suffix_candidate");
+    expect(blocks[0]?.sliceability).toBe("lossless_split_child_movable");
     expect(blocks[1]?.kind).toBe("stable_user");
     expect(blocks[1]?.positionConstraint).toBe("prefix_candidate");
+    expect(blocks[1]?.sliceability).toBe("non_movable");
     expect(blocks[1]?.text).toContain("Reply with exactly: smoke-ok");
   });
 
@@ -61,5 +63,27 @@ describe("openclaw adapter normalization", () => {
           message.content.includes("Conversation info (untrusted metadata):"),
       )?.content,
     ).toContain("Conversation info (untrusted metadata):");
+  });
+
+  it("detects conversation wrappers inside text-only content arrays from real session shapes", () => {
+    const blocks = normalizeMessages([
+      {
+        id: "msg-real",
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: 'Conversation info (untrusted metadata):\n```json\n{"conversation_label":"#dev"}\n```\n\nSender (untrusted metadata):\n```json\n{"label":"alice"}\n```\n\nhello from discord',
+          },
+        ],
+      },
+    ]);
+
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]?.kind).toBe("conversation_wrapper");
+    expect(blocks[1]?.kind).toBe("stable_user");
+    const rebuilt = blocks.flatMap((block) => block.toMessages());
+    expect(Array.isArray(rebuilt[0]?.content)).toBe(true);
+    expect(JSON.stringify(rebuilt[1]?.content)).toContain("hello from discord");
   });
 });

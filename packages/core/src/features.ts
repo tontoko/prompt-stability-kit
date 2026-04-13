@@ -1,3 +1,4 @@
+import { defaultSliceabilityForKind } from "./sliceability.js";
 import type { BlockFeatures, CorePolicyConfig, EnrichedBlock, NormalizedBlock } from "./types.js";
 
 function clamp(value: number, min = 0, max = 1): number {
@@ -93,6 +94,7 @@ export function enrichBlock(
     stableId: block.stableId ?? block.id,
     stableHash: hashes.stableHash,
     semanticHash: hashes.semanticHash,
+    sliceability: block.sliceability ?? defaultSliceabilityForKind(block.kind),
     features: buildBlockFeatures(block, config),
   };
 }

@@ -33,7 +33,35 @@ The key design principle is that cache-hit optimization is primarily a
 **placement problem**, not a rewriting problem. The optimizer tries to preserve
 exact prefix identity for as long as possible.
 
-See [docs/DESIGN.md](./docs/DESIGN.md) for the full design.
+Two constraints shape the current design:
+
+- runtime is allowed to move only **losslessly sliceable** pre-frontier
+  injected volatility
+- runtime must no-op unless it predicts a **strictly better reusable prefix**
+  than the baseline assembly
+
+## Current runtime status
+
+The OpenClaw adapter uses a narrow runtime policy right now.
+
+- runtime prompt mutation is limited to pre-frontier injected volatility
+- only explicitly sliceable spans are eligible for runtime movement
+- runtime only applies when predicted uplift is strictly positive
+- append-only turns are treated as pass-through
+- real-session replay is the source of truth for policy changes
+
+This is deliberate. Real OpenClaw logs showed that naive transcript-wide
+reordering can reduce the predicted stable prefix badly, because it breaks the
+append-only shape of long-lived sessions. The runtime policy is therefore
+restricted to injected volatility that appears before the append boundary.
+
+See the design docs:
+
+- [docs/DESIGN.md](./docs/DESIGN.md)
+- [docs/BLOCK-MODEL.md](./docs/BLOCK-MODEL.md)
+- [docs/DECISION-POLICY.md](./docs/DECISION-POLICY.md)
+- [docs/EVALUATION.md](./docs/EVALUATION.md)
+- [docs/OPENCLAW-ADAPTER.md](./docs/OPENCLAW-ADAPTER.md)
 
 ## Repository layout
 
@@ -44,6 +72,9 @@ packages/
   inspector/                telemetry CLI for real-session analysis
 docs/
   DESIGN.md
+  BLOCK-MODEL.md
+  DECISION-POLICY.md
+  EVALUATION.md
   OPENCLAW-ADAPTER.md
   TELEMETRY.md
 ```
@@ -73,6 +104,7 @@ The OpenClaw adapter owns:
 
 - OpenClaw context-engine registration
 - message normalization into core blocks
+- pre-frontier injected-volatility runtime policy
 - adapter-specific telemetry wiring
 - adapter-specific install and runtime configuration
 

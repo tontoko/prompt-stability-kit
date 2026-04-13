@@ -26,8 +26,11 @@ export function resolvePluginConfig(raw: unknown): StablePrefixPluginConfig {
         ? value.maxConversationWrapperBodyChars
         : 1600,
     largeBlockChars: typeof value.largeBlockChars === "number" ? value.largeBlockChars : 1200,
-    minConfidenceToReorder:
-      typeof value.minConfidenceToReorder === "number" ? value.minConfidenceToReorder : 0.2,
+    runtimePolicyMode: value.runtimePolicyMode === "off" ? "off" : "pre-frontier-injected-only",
+    preFrontierInjectedWindowBlocks:
+      typeof value.preFrontierInjectedWindowBlocks === "number"
+        ? value.preFrontierInjectedWindowBlocks
+        : 3,
   };
 }
 

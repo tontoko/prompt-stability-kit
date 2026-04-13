@@ -103,6 +103,8 @@ export async function loadDiagnostics(path: string): Promise<DiagnosticsSnapshot
     .map(normalizeLine);
 }
 
+export * from "./replay.js";
+
 export function summarizeDiagnostics(
   events: DiagnosticsSnapshot[],
   options: SummarizeOptions = {},

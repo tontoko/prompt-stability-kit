@@ -1,16 +1,21 @@
 import {
-  type AssembledBlock,
-  buildOptimizationPlan,
+  applyPreFrontierInjectionPolicy,
+  computePreFrontierInjectionPolicy,
   type DiagnosticsSnapshot,
+  type EnrichedBlock,
+  enrichBlocks,
 } from "@tontoko/prompt-stability-core";
 import { loadConfig } from "openclaw/plugin-sdk/config-runtime";
 import { delegateCompactionToRuntime } from "openclaw/plugin-sdk/core";
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 
 import { resolvePluginConfig } from "./config.js";
-import { assembledBlocksToMessages } from "./convert.js";
 import { normalizeMessages } from "./normalize.js";
 import { writeTelemetry } from "./telemetry.js";
+
+export { normalizeMessages } from "./normalize.js";
+
+const previousBlocksBySession = new Map<string, EnrichedBlock[]>();
 
 type RuntimeContextLike = {
   promptCache?: {
@@ -24,16 +29,14 @@ type RuntimeContextLike = {
 };
 
 function buildSnapshot(params: {
-  blocks: AssembledBlock[];
-  previousBlocks?: AssembledBlock[];
+  blocks: Array<{ kind: string; text: string }>;
   sessionId?: string;
   model?: string;
   estimatedChars: number;
   promptCache?: RuntimeContextLike["promptCache"];
   sessionKey?: string;
   agentId?: string;
-  decisionCounts?: DiagnosticsSnapshot["decisionCounts"];
-  firstDivergence?: DiagnosticsSnapshot["firstDivergence"];
+  runtimePolicy?: DiagnosticsSnapshot["runtimePolicy"];
 }): DiagnosticsSnapshot {
   const blockCounts = params.blocks.reduce<Record<string, number>>((acc, block) => {
     acc[block.kind] = (acc[block.kind] ?? 0) + 1;
@@ -49,10 +52,17 @@ function buildSnapshot(params: {
     model: params.model,
     estimatedChars: params.estimatedChars,
     blockCounts,
-    decisionCounts: params.decisionCounts,
-    firstDivergence: params.firstDivergence,
     promptCache: params.promptCache,
+    runtimePolicy: params.runtimePolicy,
   };
+}
+
+function getHistoryKey(params: {
+  sessionKey?: string;
+  sessionId?: string;
+  agentId?: string;
+}): string | undefined {
+  return params.sessionKey ?? params.sessionId ?? params.agentId;
 }
 
 export default definePluginEntry({
@@ -62,8 +72,6 @@ export default definePluginEntry({
   kind: "context-engine",
   register(api) {
     api.registerContextEngine("stable-prefix-context", () => {
-      let previousBlocks: AssembledBlock[] | undefined;
-
       return {
         info: {
           id: "stable-prefix-context",
@@ -77,37 +85,51 @@ export default definePluginEntry({
 
         async assemble(params) {
           const cfg = resolvePluginConfig(loadConfig().plugins?.entries?.["stable-prefix-context"]);
+          const sessionKey = (params as { sessionKey?: string }).sessionKey;
+          const agentId = (params as { agentId?: string }).agentId;
+          const historyKey = getHistoryKey({
+            sessionKey,
+            sessionId: params.sessionId,
+            agentId,
+          });
           const normalized = normalizeMessages(params.messages);
-          const plan = buildOptimizationPlan({
-            blocks: normalized,
-            previousBlocks: previousBlocks?.map((block) => ({
-              stableId: block.stableId,
-              hash: block.hash,
-              kind: block.kind,
-            })),
+          const blocks = enrichBlocks(normalized, cfg);
+          const runtimePolicy = computePreFrontierInjectionPolicy({
+            blocks,
+            previousBlocks: historyKey ? previousBlocksBySession.get(historyKey) : undefined,
             config: cfg,
           });
-          const decisionCounts = plan.decisions.reduce<Record<string, number>>((acc, decision) => {
-            acc[decision.decision] = (acc[decision.decision] ?? 0) + 1;
-            return acc;
-          }, {});
+          const ordered = applyPreFrontierInjectionPolicy(normalized, runtimePolicy);
+          const orderedBlocks = applyPreFrontierInjectionPolicy(blocks, runtimePolicy);
           const snapshot = buildSnapshot({
-            blocks: plan.blocks,
-            previousBlocks,
+            blocks: orderedBlocks,
             sessionId: params.sessionId,
-            sessionKey: (params as { sessionKey?: string }).sessionKey,
-            agentId: (params as { agentId?: string }).agentId,
+            sessionKey,
+            agentId,
             model: params.model,
-            estimatedChars: plan.estimatedChars,
-            decisionCounts,
-            firstDivergence: plan.firstDivergence,
+            estimatedChars: orderedBlocks.reduce((sum, block) => sum + block.text.length, 0),
+            runtimePolicy: {
+              applied: runtimePolicy.applied,
+              reason: runtimePolicy.reason,
+              firstDivergenceIndex: runtimePolicy.firstDivergence?.index,
+              moveStartIndex: runtimePolicy.moveStartIndex,
+              moveEndIndex: runtimePolicy.moveEndIndex,
+              movedStableIds: runtimePolicy.movedStableIds,
+              baselinePrefixChars: runtimePolicy.baselinePrefixChars,
+              optimizedPrefixChars: runtimePolicy.optimizedPrefixChars,
+              upliftChars: runtimePolicy.upliftChars,
+            },
           });
-          previousBlocks = plan.blocks;
+          if (historyKey) {
+            previousBlocksBySession.set(historyKey, orderedBlocks);
+          }
           await writeTelemetry(cfg.telemetryPath, snapshot);
 
           return {
-            messages: assembledBlocksToMessages(plan.blocks),
-            estimatedTokens: Math.ceil(plan.estimatedChars / 4),
+            messages: runtimePolicy.applied
+              ? ordered.flatMap((block) => block.toMessages())
+              : params.messages,
+            estimatedTokens: Math.ceil(snapshot.estimatedChars / 4),
           };
         },
 

@@ -8,8 +8,9 @@ Two event families are emitted:
 - assembly events
 - post-turn usage events
 
-Assembly events describe the block layout and divergence state. Post-turn events
-carry provider usage, including prompt-cache usage where available.
+Assembly events describe the block layout, divergence state, and runtime-policy
+decision for the current turn. Post-turn events carry provider usage, including
+prompt-cache usage where available.
 
 ## Core fields
 
@@ -19,9 +20,9 @@ carry provider usage, including prompt-cache usage where available.
 - `model`
 - `estimatedChars`
 - `blockCounts`
-- `decisionCounts`
 - `firstDivergence`
 - `promptCache`
+- `runtimePolicy`
 
 ## `firstDivergence`
 
@@ -41,19 +42,31 @@ Fields:
 This lets the inspector report divergence hotspots by block kind instead of
 only saying that a break happened.
 
-## `decisionCounts`
+## `runtimePolicy`
 
-The adapter records aggregate decision counts for the current assembly snapshot.
-This is intended for real-session trend analysis, not per-block replay.
+Runtime policy is the key online signal. It captures whether the adapter
+applied a runtime movement and why.
 
-Current decision keys may include:
+Fields may include:
 
-- `prefix_required`
-- `suffix_ok`
-- `summarize_ok`
-- `drop_ok`
+- `applied`
+- `reason`
+- `firstDivergenceIndex`
+- `moveStartIndex`
+- `moveEndIndex`
+- `movedStableIds`
+- `baselinePrefixChars`
+- `optimizedPrefixChars`
+- `upliftChars`
 
-These counts describe how the optimizer redistributed blocks during assembly.
+Typical reasons include:
+
+- `missing-previous-prefix`
+- `append-only-growth`
+- `divergence-not-pre-frontier-injected-volatility`
+- `no-stable-suffix-after-injected-window`
+- `predicted-no-uplift`
+- `pre-frontier-injected-window`
 
 ## `promptCache`
 
@@ -82,15 +95,19 @@ Common fields:
     "assistant_turn": 82,
     "other": 29
   },
-  "decisionCounts": {
-    "prefix_required": 163,
-    "suffix_ok": 6
-  },
   "firstDivergence": {
     "index": 14,
     "currentId": "conversation-wrapper-3",
     "currentKind": "conversation_wrapper",
     "currentHash": "def"
+  },
+  "runtimePolicy": {
+    "applied": false,
+    "reason": "append-only-growth",
+    "firstDivergenceIndex": 58,
+    "baselinePrefixChars": 182341,
+    "optimizedPrefixChars": 182341,
+    "upliftChars": 0
   },
   "promptCache": {
     "lastCallUsage": {

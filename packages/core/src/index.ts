@@ -4,4 +4,6 @@ export * from "./decision.js";
 export * from "./divergence.js";
 export * from "./features.js";
 export * from "./hash.js";
+export * from "./runtime-policy.js";
+export * from "./sliceability.js";
 export * from "./types.js";

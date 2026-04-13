@@ -26,16 +26,17 @@ decisions belong in the core package.
 Current runtime responsibilities:
 
 - `assemble()`
-  Normalize OpenClaw messages into blocks, compute an optimization plan, reorder
-  blocks deterministically, and emit prompt-assembly telemetry.
+  Normalize OpenClaw messages into blocks, apply the narrow runtime policy only
+  when the current turn diverges before the append boundary with injected
+  volatility, and emit prompt-assembly telemetry.
 - `afterTurn()`
   Emit provider usage and prompt-cache telemetry after the turn completes.
 - `compact()`
   Delegate to the OpenClaw runtime compactor.
 
-The adapter does not perform transcript rewriting. Its job is to expose the
-core optimizer inside OpenClaw and make the resulting behavior observable in
-real development sessions.
+The adapter does not perform transcript rewriting. Its runtime policy is
+limited to pre-frontier injected volatility, requires explicit sliceability, and
+keeps append-only turns as a pass-through.
 
 ## Config
 
@@ -52,7 +53,8 @@ real development sessions.
           "telemetryPath": "~/.openclaw/logs/context-engine/stable-prefix.jsonl",
           "dedupeControlMessages": true,
           "largeBlockChars": 1200,
-          "minConfidenceToReorder": 0.2,
+          "runtimePolicyMode": "pre-frontier-injected-only",
+          "preFrontierInjectedWindowBlocks": 3,
           "maxInternalContextChars": 800,
           "maxConversationWrapperBodyChars": 1600
         }
@@ -71,9 +73,14 @@ real development sessions.
 - `largeBlockChars`
   Size threshold that increases the likelihood of a block being treated as a
   `summarize_ok` candidate by the decision engine.
+- `runtimePolicyMode`
+  Runtime policy mode. `pre-frontier-injected-only` is the safe default and
+  only acts when divergence appears before the append boundary.
+- `preFrontierInjectedWindowBlocks`
+  Maximum contiguous injected-volatility blocks moved by the runtime policy.
 - `minConfidenceToReorder`
-  Minimum confidence required before a non-fixed block is moved out of the
-  working prefix.
+  Legacy compatibility field retained for old configs. The current runtime
+  policy does not perform confidence-based transcript-wide reordering.
 - `maxInternalContextChars`
   Telemetry-only hint for very large internal-context blocks.
 - `maxConversationWrapperBodyChars`
@@ -93,12 +100,14 @@ Recommended validation loop:
 2. restart the gateway
 3. run real work in OpenClaw
 4. inspect the emitted telemetry with `prompt-stability-inspector`
+5. validate candidate policies with `prompt-stability-replay`
 
 Example:
 
 ```bash
 openclaw gateway restart
 prompt-stability-inspector ~/.openclaw/logs/context-engine/stable-prefix.jsonl --top 10
+prompt-stability-replay ~/.openclaw/agents/orchestrator/sessions/<session>.jsonl
 ```
 
 ## Switching back to the legacy engine
@@ -112,3 +121,18 @@ prompt-stability-inspector ~/.openclaw/logs/context-engine/stable-prefix.jsonl -
   }
 }
 ```
+
+## Runtime safety model
+
+The adapter compares the current candidate against the **actual previously sent
+order**, not merely the baseline transcript order.
+
+Runtime movement is allowed only when all of the following are true:
+
+1. divergence occurs before the prior append boundary
+2. the divergent window is injected volatility
+3. the affected spans are explicitly sliceable and losslessly movable
+4. predicted optimized prefix chars are strictly greater than baseline prefix
+   chars
+
+If any condition fails, runtime assembly is a no-op.

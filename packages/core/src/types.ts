@@ -19,6 +19,12 @@ export type PromptStabilityRole = "system" | "user" | "assistant" | "tool" | "ot
 
 export type BlockPositionConstraint = "fixed_prefix" | "prefix_candidate" | "suffix_candidate";
 
+export type BlockSliceability =
+  | "non_movable"
+  | "lossless_whole_movable"
+  | "lossless_split_child_movable"
+  | "future_only";
+
 export type PromptStabilityDecision = "prefix_required" | "suffix_ok" | "summarize_ok" | "drop_ok";
 
 export type DecisionRegion =
@@ -37,6 +43,7 @@ export type NormalizedBlock = {
   stableId?: string;
   source?: string;
   positionConstraint?: BlockPositionConstraint;
+  sliceability?: BlockSliceability;
   metadata?: Record<string, string | number | boolean | null | undefined>;
 };
 
@@ -118,6 +125,17 @@ export type DiagnosticsSnapshot = {
     };
     [key: string]: unknown;
   };
+  runtimePolicy?: {
+    applied: boolean;
+    reason: string;
+    firstDivergenceIndex?: number;
+    moveStartIndex?: number;
+    moveEndIndex?: number;
+    movedStableIds?: string[];
+    baselinePrefixChars?: number;
+    optimizedPrefixChars?: number;
+    upliftChars?: number;
+  };
 };
 
 export type CorePolicyConfig = {
@@ -131,6 +149,9 @@ export type CorePolicyConfig = {
   divergenceLookahead?: number;
   dedupeControlMessages?: boolean;
   minConfidenceToReorder?: number;
+  runtimePolicyMode?: "pre-frontier-injected-only" | "off";
+  preFrontierInjectedKinds?: PromptStabilityBlockKind[];
+  preFrontierInjectedWindowBlocks?: number;
   heuristicWeights?: Partial<{
     volatility: number;
     prefixValue: number;
@@ -156,4 +177,16 @@ export type AssemblyPlan = {
   blockCounts: Partial<Record<PromptStabilityBlockKind, number>>;
   firstDivergence?: FirstDivergence;
   fixedPrefixBoundary: FixedPrefixBoundary;
+};
+
+export type RuntimePolicyPlan = {
+  applied: boolean;
+  reason: string;
+  firstDivergence?: FirstDivergence;
+  moveStartIndex?: number;
+  moveEndIndex?: number;
+  movedStableIds: string[];
+  baselinePrefixChars?: number;
+  optimizedPrefixChars?: number;
+  upliftChars?: number;
 };

@@ -1,6 +1,6 @@
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { NormalizedBlock, PromptStabilityRole } from "@tontoko/prompt-stability-core";
-import { classifyBlock } from "@tontoko/prompt-stability-core";
+import { classifyBlock, defaultSliceabilityForKind } from "@tontoko/prompt-stability-core";
 
 type AnyMessage = {
   role?: string;
@@ -49,6 +49,42 @@ function stringifyContent(content: unknown): string {
   return String(content ?? "");
 }
 
+function extractTextualBlob(content: unknown): string | undefined {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return undefined;
+
+  const parts: string[] = [];
+  for (const part of content) {
+    if (typeof part === "string") {
+      parts.push(part);
+      continue;
+    }
+    if (
+      part &&
+      typeof part === "object" &&
+      "text" in part &&
+      typeof part.text === "string" &&
+      (!("type" in part) ||
+        part.type === "text" ||
+        part.type === "input_text" ||
+        part.type === "output_text")
+    ) {
+      parts.push(part.text);
+      continue;
+    }
+    return undefined;
+  }
+
+  return parts.join("\n");
+}
+
+function buildTextContentLike(originalContent: unknown, text: string): unknown {
+  if (Array.isArray(originalContent)) {
+    return [{ type: "text", text }];
+  }
+  return text;
+}
+
 function buildTextMessage(
   value: AnyMessage,
   role: PromptStabilityRole,
@@ -59,7 +95,7 @@ function buildTextMessage(
     ...value,
     id,
     role: role === "other" ? "user" : role,
-    content: text,
+    content: buildTextContentLike(value.content, text),
   } as unknown as AgentMessage;
 }
 
@@ -84,6 +120,23 @@ function splitConversationWrapper(text: string): { wrapper: string; body: string
     }
   }
 
+  if (text.startsWith("Conversation info (untrusted metadata):")) {
+    const fenceIndices: number[] = [];
+    let from = 0;
+    while (true) {
+      const index = text.indexOf("```", from);
+      if (index < 0) break;
+      fenceIndices.push(index);
+      from = index + 3;
+    }
+    const lastFence = fenceIndices.at(-1);
+    if (lastFence !== undefined) {
+      const body = text.slice(lastFence + 3).trim();
+      const wrapper = text.slice(0, lastFence + 3).trim();
+      if (wrapper && body) return { wrapper, body };
+    }
+  }
+
   return undefined;
 }
 
@@ -96,6 +149,7 @@ function makeBlock(params: {
   stableId?: string;
   source?: string;
   positionConstraint?: NormalizedBlock["positionConstraint"];
+  sliceability?: NormalizedBlock["sliceability"];
   kind?: NormalizedBlock["kind"];
   toMessages?: () => AgentMessage[];
 }): NormalizedOpenClawBlock {
@@ -107,11 +161,15 @@ function makeBlock(params: {
     stableId: params.stableId,
     source: params.source,
     positionConstraint: params.positionConstraint,
+    sliceability: params.sliceability,
   };
+
+  const kind = params.kind ?? classifyBlock(base);
 
   return {
     ...base,
-    kind: params.kind ?? classifyBlock(base),
+    kind,
+    sliceability: params.sliceability ?? defaultSliceabilityForKind(kind),
     originalMessage: params.value,
     toMessages: params.toMessages ?? (() => [params.value as unknown as AgentMessage]),
   };
@@ -123,8 +181,8 @@ export function normalizeMessages(messages: unknown[]): NormalizedOpenClawBlock[
     const role = normalizeRole(value.role);
     const text = stringifyContent(value.content);
     const id = typeof value.id === "string" ? value.id : `message-${index}`;
-    const split =
-      typeof value.content === "string" ? splitConversationWrapper(value.content) : undefined;
+    const textualBlob = extractTextualBlob(value.content);
+    const split = textualBlob ? splitConversationWrapper(textualBlob) : undefined;
 
     if (split) {
       return [
@@ -137,6 +195,7 @@ export function normalizeMessages(messages: unknown[]): NormalizedOpenClawBlock[
           text: split.wrapper,
           source: "conversation_wrapper",
           positionConstraint: "suffix_candidate",
+          sliceability: "lossless_split_child_movable",
           kind: "conversation_wrapper",
           toMessages: () => [buildTextMessage(value, role, split.wrapper, `${id}:wrapper`)],
         }),
@@ -149,6 +208,7 @@ export function normalizeMessages(messages: unknown[]): NormalizedOpenClawBlock[
           text: split.body,
           source: "conversation_body",
           positionConstraint: "prefix_candidate",
+          sliceability: "non_movable",
           kind:
             role === "user"
               ? "stable_user"
