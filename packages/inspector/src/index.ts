@@ -104,6 +104,7 @@ export async function loadDiagnostics(path: string): Promise<DiagnosticsSnapshot
 }
 
 export * from "./replay.js";
+export * from "./surfaces.js";
 
 export function summarizeDiagnostics(
   events: DiagnosticsSnapshot[],

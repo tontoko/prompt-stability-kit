@@ -11,7 +11,7 @@ import {
   type PromptStabilityDecision,
 } from "@tontoko/prompt-stability-core";
 
-type SessionEnvelope = {
+export type SessionEnvelope = {
   type?: string;
   id?: string;
   message?: {

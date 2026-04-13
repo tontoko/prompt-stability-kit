@@ -118,6 +118,7 @@ The inspector is a CLI for real-session validation. It summarizes:
 - divergence hotspots
 - decision counts
 - sessions consuming the most prompt tokens
+- injected volatility surfaces and their total character budgets
 
 ## Inspector usage
 
@@ -131,6 +132,28 @@ Useful options:
 prompt-stability-inspector telemetry.jsonl --top 10
 prompt-stability-inspector telemetry.jsonl --session <session-id>
 prompt-stability-inspector telemetry.jsonl --json
+```
+
+Replay a real session transcript:
+
+```bash
+prompt-stability-replay ~/.openclaw/agents/orchestrator/sessions/<session>.jsonl
+```
+
+Inspect injected volatility surfaces across one or more sessions:
+
+```bash
+prompt-stability-surfaces ~/.openclaw/agents/orchestrator/sessions/<session>.jsonl
+prompt-stability-surfaces session-a.jsonl session-b.jsonl --top 12
+prompt-stability-surfaces session-a.jsonl session-b.jsonl --json
+```
+
+Compare baseline and candidate session groups:
+
+```bash
+prompt-stability-compare \
+  --baseline old-a.jsonl old-b.jsonl \
+  --candidate new-a.jsonl new-b.jsonl
 ```
 
 ## OpenClaw install

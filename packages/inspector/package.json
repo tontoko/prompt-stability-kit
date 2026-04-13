@@ -15,7 +15,9 @@
   },
   "bin": {
     "prompt-stability-inspector": "./dist/cli.js",
-    "prompt-stability-replay": "./dist/replay-cli.js"
+    "prompt-stability-replay": "./dist/replay-cli.js",
+    "prompt-stability-surfaces": "./dist/surfaces-cli.js",
+    "prompt-stability-compare": "./dist/surfaces-compare-cli.js"
   },
   "files": [
     "dist"
