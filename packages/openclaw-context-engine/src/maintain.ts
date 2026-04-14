@@ -13,11 +13,13 @@ const COMPACTED_MARKER = "[Prompt Stability: compacted injected context]";
 type SessionEnvelope = {
   type?: string;
   id?: string;
+  parentId?: string;
   message?: AgentMessage;
 };
 
 type TranscriptEntry = {
   entryId: string;
+  parentId?: string;
   message: AnyMessage;
 };
 
@@ -119,8 +121,25 @@ async function loadTranscriptEntries(sessionFile: string): Promise<TranscriptEnt
 
   return events.flatMap((event) => {
     if (event.type !== "message" || !event.id || !event.message) return [];
-    return [{ entryId: event.id, message: event.message }];
+    return [{ entryId: event.id, parentId: event.parentId, message: event.message }];
   });
+}
+
+export function deriveActiveBranchEntries(entries: TranscriptEntry[]): TranscriptEntry[] {
+  if (entries.length === 0) return [];
+
+  const byId = new Map(entries.map((entry) => [entry.entryId, entry]));
+  const active: TranscriptEntry[] = [];
+  let cursor: TranscriptEntry | undefined = entries[entries.length - 1];
+
+  while (cursor) {
+    active.unshift(cursor);
+    const parentId = cursor.parentId?.trim();
+    if (!parentId) break;
+    cursor = byId.get(parentId);
+  }
+
+  return active;
 }
 
 export function matchActiveBranchEntries(
@@ -344,7 +363,7 @@ export async function runFutureChurnMaintenance(params: {
   const entries = await loadTranscriptEntries(params.sessionFile);
   const activeEntries = params.activeMessages
     ? matchActiveBranchEntries(entries, params.activeMessages)
-    : entries;
+    : deriveActiveBranchEntries(entries);
 
   if (!activeEntries) {
     return {

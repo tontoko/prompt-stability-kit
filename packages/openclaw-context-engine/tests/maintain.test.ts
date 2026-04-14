@@ -47,6 +47,7 @@ describe("future-turn maintenance", () => {
       JSON.stringify({
         type: "message",
         id: "assistant-1",
+        parentId: "user-1",
         message: {
           role: "assistant",
           content: [{ type: "text", text: "ack" }],

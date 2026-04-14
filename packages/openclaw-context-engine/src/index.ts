@@ -143,13 +143,20 @@ export default definePluginEntry({
 
         async maintain(params) {
           const cfg = resolvePluginConfig(loadConfig().plugins?.entries?.["stable-prefix-context"]);
-          const result = {
-            changed: false,
-            bytesFreed: 0,
-            rewrittenEntries: 0,
-            reason: "deferred-to-after-turn",
-            compactedKinds: {},
-          };
+          const result = await runFutureChurnMaintenance({
+            sessionId: params.sessionId,
+            sessionKey: params.sessionKey,
+            sessionFile: params.sessionFile,
+            runtimeContext: params.runtimeContext,
+            config: cfg,
+          });
+          if (result.changed) {
+            const historyKey = getHistoryKey({
+              sessionKey: params.sessionKey,
+              sessionId: params.sessionId,
+            });
+            if (historyKey) previousBlocksBySession.delete(historyKey);
+          }
           await writeTelemetry(cfg.telemetryPath, {
             timestamp: new Date().toISOString(),
             engineId: "stable-prefix-context",
@@ -170,22 +177,6 @@ export default definePluginEntry({
 
         async afterTurn(params) {
           const cfg = resolvePluginConfig(loadConfig().plugins?.entries?.["stable-prefix-context"]);
-          const maintenanceResult = await runFutureChurnMaintenance({
-            sessionId: params.sessionId,
-            sessionKey: params.sessionKey,
-            sessionFile: params.sessionFile,
-            activeMessages: params.messages,
-            runtimeContext: params.runtimeContext,
-            config: cfg,
-          });
-          if (maintenanceResult.changed) {
-            const historyKey = getHistoryKey({
-              sessionKey: params.sessionKey,
-              sessionId: params.sessionId,
-              agentId: (params as { agentId?: string }).agentId,
-            });
-            if (historyKey) previousBlocksBySession.delete(historyKey);
-          }
           await writeTelemetry(cfg.telemetryPath, {
             timestamp: new Date().toISOString(),
             engineId: "stable-prefix-context",
@@ -195,13 +186,6 @@ export default definePluginEntry({
             estimatedChars: 0,
             blockCounts: {},
             promptCache: params.runtimeContext?.promptCache,
-            maintenance: {
-              changed: maintenanceResult.changed,
-              reason: maintenanceResult.reason,
-              rewrittenEntries: maintenanceResult.rewrittenEntries,
-              bytesFreed: maintenanceResult.bytesFreed,
-              compactedKinds: maintenanceResult.compactedKinds,
-            },
           });
         },
 
