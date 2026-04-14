@@ -48,6 +48,7 @@ The OpenClaw adapter uses a narrow runtime policy right now.
 - only explicitly sliceable spans are eligible for runtime movement
 - runtime only applies when predicted uplift is strictly positive
 - append-only turns are treated as pass-through
+- after-send maintenance compacts older injected context to reduce future-turn churn
 - real-session replay is the source of truth for policy changes
 
 This is deliberate. Real OpenClaw logs showed that naive transcript-wide
@@ -140,6 +141,11 @@ Replay a real session transcript:
 ```bash
 prompt-stability-replay ~/.openclaw/agents/orchestrator/sessions/<session>.jsonl
 ```
+
+The replay output reports both:
+
+- current-turn runtime uplift
+- future-turn maintenance effect after injected-context compaction
 
 Inspect injected volatility surfaces across one or more sessions:
 

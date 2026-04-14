@@ -135,6 +135,11 @@ This means the optimizer must distinguish between:
 2. **future-turn churn reduction**
    useful after unavoidable misses, but not a way to save the current turn
 
+Replay and evaluation should therefore model both worlds:
+
+- baseline current-turn assembly
+- maintenance-adjusted future turns after older injected context has been compacted
+
 The runtime adapter therefore must never apply a reorder blindly. It should
 only do so when replay semantics predict a strictly better stable prefix than
 the baseline assembly.

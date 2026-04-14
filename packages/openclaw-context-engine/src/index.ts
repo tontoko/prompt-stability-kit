@@ -19,6 +19,7 @@ export {
   analyzeMaintenanceCandidateForMessage,
   buildCompactedText,
   runFutureChurnMaintenance,
+  simulateFutureChurnMaintenance,
 } from "./maintain.js";
 export { normalizeMessages } from "./normalize.js";
 

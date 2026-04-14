@@ -84,6 +84,9 @@ if (options.help || !options.file) {
       `  turns with potential maintenance benefit: ${result.summary.turnsWithPotentialMaintenanceBenefit}/${result.summary.totalTurns}`,
     );
     console.log(
+      `  turns with positive maintenance uplift: ${result.summary.turnsWithPositiveMaintenanceUplift}/${result.summary.totalTurns}`,
+    );
+    console.log(
       `  potential maintenance rewrites: ${result.summary.totalPotentialMaintenanceRewrites}`,
     );
     console.log(
@@ -92,6 +95,19 @@ if (options.help || !options.file) {
     console.log(`  baseline prefix chars avg: ${result.summary.averageBaselinePrefixChars}`);
     console.log(`  optimized prefix chars avg: ${result.summary.averageOptimizedPrefixChars}`);
     console.log(`  avg uplift chars: ${result.summary.averageUpliftChars}`);
+    console.log(
+      `  maintenance-adjusted prefix chars avg: ${result.summary.averageMaintenanceAdjustedPrefixChars}`,
+    );
+    console.log(`  avg maintenance uplift chars: ${result.summary.averageMaintenanceUpliftChars}`);
+    console.log(
+      `  maintenance-adjusted append-only turns: ${result.summary.maintenanceAdjustedAppendOnlyTurns}/${result.summary.totalTurns}`,
+    );
+    console.log(
+      `  applied maintenance rewrites: ${result.summary.totalAppliedMaintenanceRewrites}`,
+    );
+    console.log(
+      `  applied maintenance bytes freed: ${result.summary.totalAppliedMaintenanceBytesFreed}`,
+    );
     console.log(`  turns with positive uplift: ${result.summary.turnsWithPositiveUplift}`);
     console.log("");
     console.log("Top turns by uplift");

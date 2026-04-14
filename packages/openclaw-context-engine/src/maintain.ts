@@ -46,6 +46,10 @@ export type MaintenanceResult = {
   compactedKinds: Partial<Record<PromptStabilityBlockKind, number>>;
 };
 
+export type InMemoryMaintenanceResult = MaintenanceResult & {
+  messages: AgentMessage[];
+};
+
 export type MaintenanceCandidate = {
   bodyText?: string;
   compactedKinds: PromptStabilityBlockKind[];
@@ -199,6 +203,87 @@ function buildReplacementMessage(original: AnyMessage, text: string): AgentMessa
     ...original,
     content: buildTextContentLike(original.content, text),
   } as AgentMessage;
+}
+
+export function simulateFutureChurnMaintenance(params: {
+  messages: AgentMessage[];
+  config: StablePrefixPluginConfig;
+  sessionPartition?: string;
+}): InMemoryMaintenanceResult {
+  if (params.config.maintainMode === "off") {
+    return {
+      changed: false,
+      bytesFreed: 0,
+      rewrittenEntries: 0,
+      reason: "maintenance-disabled",
+      compactedKinds: {},
+      messages: params.messages,
+    };
+  }
+
+  if (params.messages.length <= (params.config.maintainPreserveTailMessages ?? 8)) {
+    return {
+      changed: false,
+      bytesFreed: 0,
+      rewrittenEntries: 0,
+      reason: "tail-preserved-only",
+      compactedKinds: {},
+      messages: params.messages,
+    };
+  }
+
+  const preserveTail = params.config.maintainPreserveTailMessages ?? 8;
+  const maxRewrites = params.config.maintainMaxRewritesPerPass ?? 6;
+  const minBytesSaved = params.config.maintainMinBytesSaved ?? 120;
+  const nextMessages = [...params.messages];
+  const compactedKinds: Partial<Record<PromptStabilityBlockKind, number>> = {};
+  let bytesFreed = 0;
+  let rewrittenEntries = 0;
+
+  for (let index = 0; index < Math.max(0, nextMessages.length - preserveTail); index += 1) {
+    if (rewrittenEntries >= maxRewrites) break;
+
+    const message = nextMessages[index] as AnyMessage | undefined;
+    if (!message) continue;
+
+    const analysis = analyzeMaintenanceCandidateForMessage(message, params.config);
+    if (!analysis) continue;
+
+    const compactedText = buildCompactedText({
+      artifactRef: `memory://${params.sessionPartition ?? "session"}/${message.id ?? index}`,
+      compactedKinds: analysis.compactedKinds,
+      bodyText: analysis.bodyText,
+    });
+    const saved = analysis.originalText.length - compactedText.length;
+    if (saved < minBytesSaved) continue;
+
+    nextMessages[index] = buildReplacementMessage(message, compactedText);
+    bytesFreed += saved;
+    rewrittenEntries += 1;
+    for (const kind of analysis.compactedKinds) {
+      compactedKinds[kind] = (compactedKinds[kind] ?? 0) + 1;
+    }
+  }
+
+  if (rewrittenEntries === 0) {
+    return {
+      changed: false,
+      bytesFreed: 0,
+      rewrittenEntries: 0,
+      reason: "no-eligible-injected-context",
+      compactedKinds: {},
+      messages: params.messages,
+    };
+  }
+
+  return {
+    changed: true,
+    bytesFreed,
+    rewrittenEntries,
+    reason: "rewritten",
+    compactedKinds,
+    messages: nextMessages,
+  };
 }
 
 export async function runFutureChurnMaintenance(params: {

@@ -86,10 +86,16 @@ describe("session replay evaluator", () => {
     expect(replay.turns[1]?.upliftChars).toBe(0);
     expect(replay.turns[1]?.potentialMaintenanceBytesFreed).toBeGreaterThan(0);
     expect(replay.turns[1]?.potentialMaintenanceRewrites).toBeGreaterThan(0);
+    expect(replay.turns[1]?.maintenanceBytesFreedApplied).toBeGreaterThan(0);
+    expect(replay.turns[1]?.maintenanceRewritesApplied).toBeGreaterThan(0);
+    expect(replay.turns[1]?.maintenanceAdjustedPrefixChars).toBeGreaterThanOrEqual(0);
     expect(replay.summary.baselineAppendOnlyTurns).toBeGreaterThanOrEqual(0);
+    expect(replay.summary.maintenanceAdjustedAppendOnlyTurns).toBeGreaterThanOrEqual(0);
     expect(replay.summary.turnsWhereCurrentTurnReorderCannotHelp).toBeGreaterThanOrEqual(0);
     expect(replay.summary.turnsWithPotentialMaintenanceBenefit).toBeGreaterThan(0);
     expect(replay.summary.totalPotentialMaintenanceBytesFreed).toBeGreaterThan(0);
+    expect(replay.summary.totalAppliedMaintenanceBytesFreed).toBeGreaterThan(0);
+    expect(replay.summary.totalAppliedMaintenanceRewrites).toBeGreaterThan(0);
     expect(replay.summary.totalActualInputTokens).toBe(200);
   });
 });

@@ -5,6 +5,7 @@ import {
   buildCompactedText,
   normalizeMessages,
   type StablePrefixPluginConfig,
+  simulateFutureChurnMaintenance,
 } from "@tontoko/openclaw-stable-prefix-context";
 import {
   applyPreFrontierInjectionPolicy,
@@ -51,8 +52,14 @@ export type ReplayTurn = {
   baselinePrefixChars: number;
   optimizedPrefixChars: number;
   upliftChars: number;
+  maintenanceAdjustedPrefixChars: number;
+  maintenanceAdjustedAppendOnly: boolean;
+  maintenanceUpliftChars: number;
+  maintenanceBytesFreedApplied: number;
+  maintenanceRewritesApplied: number;
   baselineFirstDivergence?: FirstDivergence;
   optimizedFirstDivergence?: FirstDivergence;
+  maintenanceAdjustedFirstDivergence?: FirstDivergence;
   movedBlocks: number;
   movedStableIds: string[];
   decisionCounts: Partial<Record<PromptStabilityDecision, number>>;
@@ -74,6 +81,14 @@ export type ReplaySummary = {
   averageOptimizedPrefixChars: number;
   averageUpliftChars: number;
   turnsWithPositiveUplift: number;
+  totalMaintenanceAdjustedPrefixChars: number;
+  averageMaintenanceAdjustedPrefixChars: number;
+  totalMaintenanceUpliftChars: number;
+  averageMaintenanceUpliftChars: number;
+  turnsWithPositiveMaintenanceUplift: number;
+  maintenanceAdjustedAppendOnlyTurns: number;
+  totalAppliedMaintenanceBytesFreed: number;
+  totalAppliedMaintenanceRewrites: number;
   baselineAppendOnlyTurns: number;
   optimizedAppendOnlyTurns: number;
   turnsWhereCurrentTurnReorderCannotHelp: number;
@@ -154,9 +169,12 @@ export function replaySession(
 ): { turns: ReplayTurn[]; summary: ReplaySummary } {
   const top = options.top ?? 10;
   const transcript: Array<Record<string, unknown>> = [];
+  let maintainedTranscript: Array<Record<string, unknown>> = [];
   const turns: ReplayTurn[] = [];
   let previousSent: EnrichedBlock[] | undefined;
   let previousSentSerialized: string | undefined;
+  let previousMaintainedSent: EnrichedBlock[] | undefined;
+  let previousMaintainedSerialized: string | undefined;
   let sessionId: string | undefined;
 
   for (const event of events) {
@@ -174,6 +192,28 @@ export function replaySession(
       const baselineSerialized = serializeEnriched(baseline);
       const baselineAppendOnly = isAppendOnly(previousSentSerialized, baselineSerialized);
       const baselinePrefix = prefixChars(baseline, baselineFirstDivergence);
+
+      const maintainedNormalized = normalizeMessages(maintainedTranscript);
+      const maintainedBaseline = enrichBlocks(maintainedNormalized, options.config);
+      const maintainedPolicy = computePreFrontierInjectionPolicy({
+        blocks: maintainedBaseline,
+        previousBlocks: previousMaintainedSent,
+        config: options.config,
+      });
+      const maintainedOrdered = applyPreFrontierInjectionPolicy(
+        maintainedNormalized,
+        maintainedPolicy,
+      );
+      const maintainedOptimized = enrichBlocks(maintainedOrdered, options.config);
+      const maintainedFirstDivergence = computeFirstDivergence(
+        previousMaintainedSent,
+        maintainedOptimized,
+      );
+      const maintainedSerialized = serializeEnriched(maintainedOptimized);
+      const maintainedAppendOnly = isAppendOnly(previousMaintainedSerialized, maintainedSerialized);
+      const maintainedPrefix =
+        maintainedPolicy.optimizedPrefixChars ??
+        prefixChars(maintainedOptimized, maintainedFirstDivergence);
 
       const runtimePolicy = computePreFrontierInjectionPolicy({
         blocks: baseline,
@@ -234,8 +274,14 @@ export function replaySession(
         baselinePrefixChars: baselinePrefix,
         optimizedPrefixChars: optimizedPrefix,
         upliftChars: optimizedPrefix - baselinePrefix,
+        maintenanceAdjustedPrefixChars: maintainedPrefix,
+        maintenanceAdjustedAppendOnly: maintainedAppendOnly,
+        maintenanceUpliftChars: maintainedPrefix - baselinePrefix,
+        maintenanceBytesFreedApplied: 0,
+        maintenanceRewritesApplied: 0,
         baselineFirstDivergence,
         optimizedFirstDivergence,
+        maintenanceAdjustedFirstDivergence: maintainedFirstDivergence,
         movedBlocks: movement.movedBlocks,
         movedStableIds: movement.movedStableIds,
         decisionCounts: countDecisions(
@@ -247,9 +293,30 @@ export function replaySession(
 
       previousSent = runtimePolicy.applied ? optimized : baseline;
       previousSentSerialized = runtimePolicy.applied ? optimizedSerialized : baselineSerialized;
+      previousMaintainedSent = maintainedPolicy.applied ? maintainedOptimized : maintainedBaseline;
+      previousMaintainedSerialized = maintainedPolicy.applied
+        ? maintainedSerialized
+        : serializeEnriched(maintainedBaseline);
     }
 
     transcript.push(message as Record<string, unknown>);
+    maintainedTranscript.push(message as Record<string, unknown>);
+
+    if (message.role === "assistant") {
+      const maintenanceResult = simulateFutureChurnMaintenance({
+        messages: maintainedTranscript as unknown as AgentMessage[],
+        config: options.config ?? {},
+        sessionPartition: sessionId,
+      });
+      maintainedTranscript = maintenanceResult.messages as unknown as Array<
+        Record<string, unknown>
+      >;
+      const latestTurn = turns.at(-1);
+      if (latestTurn) {
+        latestTurn.maintenanceBytesFreedApplied = maintenanceResult.bytesFreed;
+        latestTurn.maintenanceRewritesApplied = maintenanceResult.rewrittenEntries;
+      }
+    }
   }
 
   const totalActualInputTokens = turns.reduce((sum, turn) => sum + turn.actualInputTokens, 0);
@@ -261,6 +328,28 @@ export function replaySession(
   const totalOptimizedPrefixChars = turns.reduce((sum, turn) => sum + turn.optimizedPrefixChars, 0);
   const totalUpliftChars = turns.reduce((sum, turn) => sum + turn.upliftChars, 0);
   const turnsWithPositiveUplift = turns.filter((turn) => turn.upliftChars > 0).length;
+  const totalMaintenanceAdjustedPrefixChars = turns.reduce(
+    (sum, turn) => sum + turn.maintenanceAdjustedPrefixChars,
+    0,
+  );
+  const totalMaintenanceUpliftChars = turns.reduce(
+    (sum, turn) => sum + turn.maintenanceUpliftChars,
+    0,
+  );
+  const turnsWithPositiveMaintenanceUplift = turns.filter(
+    (turn) => turn.maintenanceUpliftChars > 0,
+  ).length;
+  const maintenanceAdjustedAppendOnlyTurns = turns.filter(
+    (turn) => turn.maintenanceAdjustedAppendOnly,
+  ).length;
+  const totalAppliedMaintenanceBytesFreed = turns.reduce(
+    (sum, turn) => sum + turn.maintenanceBytesFreedApplied,
+    0,
+  );
+  const totalAppliedMaintenanceRewrites = turns.reduce(
+    (sum, turn) => sum + turn.maintenanceRewritesApplied,
+    0,
+  );
   const baselineAppendOnlyTurns = turns.filter((turn) => turn.baselineAppendOnly).length;
   const optimizedAppendOnlyTurns = turns.filter((turn) => turn.optimizedAppendOnly).length;
   const turnsWhereCurrentTurnReorderCannotHelp = turns.filter(
@@ -299,6 +388,18 @@ export function replaySession(
       : 0,
     averageUpliftChars: turns.length ? Math.round(totalUpliftChars / turns.length) : 0,
     turnsWithPositiveUplift,
+    totalMaintenanceAdjustedPrefixChars,
+    averageMaintenanceAdjustedPrefixChars: turns.length
+      ? Math.round(totalMaintenanceAdjustedPrefixChars / turns.length)
+      : 0,
+    totalMaintenanceUpliftChars,
+    averageMaintenanceUpliftChars: turns.length
+      ? Math.round(totalMaintenanceUpliftChars / turns.length)
+      : 0,
+    turnsWithPositiveMaintenanceUplift,
+    maintenanceAdjustedAppendOnlyTurns,
+    totalAppliedMaintenanceBytesFreed,
+    totalAppliedMaintenanceRewrites,
     baselineAppendOnlyTurns,
     optimizedAppendOnlyTurns,
     turnsWhereCurrentTurnReorderCannotHelp,
