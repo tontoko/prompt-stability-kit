@@ -56,6 +56,13 @@ export type MaintenanceCandidate = {
   originalText: string;
 };
 
+function messageSignature(message: AnyMessage | AgentMessage): string {
+  const role = typeof message.role === "string" ? message.role : "";
+  const content = "content" in message ? message.content : undefined;
+  const text = stringifyTextContent(content).replace(/\s+/g, " ").trim();
+  return `${role}\u241f${text}`;
+}
+
 const DEFAULT_MAINTAIN_REWRITE_KINDS = new Set<PromptStabilityBlockKind>([
   "inbound_notice",
   "conversation_wrapper",
@@ -114,6 +121,27 @@ async function loadTranscriptEntries(sessionFile: string): Promise<TranscriptEnt
     if (event.type !== "message" || !event.id || !event.message) return [];
     return [{ entryId: event.id, message: event.message }];
   });
+}
+
+export function matchActiveBranchEntries(
+  entries: TranscriptEntry[],
+  activeMessages: AgentMessage[],
+): TranscriptEntry[] | undefined {
+  if (activeMessages.length === 0) return [];
+
+  const activeSignatures = activeMessages.map((message) => messageSignature(message));
+  const matched: TranscriptEntry[] = [];
+  let activeIndex = activeSignatures.length - 1;
+
+  for (let entryIndex = entries.length - 1; entryIndex >= 0 && activeIndex >= 0; entryIndex -= 1) {
+    const entry = entries[entryIndex];
+    if (!entry) continue;
+    if (messageSignature(entry.message) !== activeSignatures[activeIndex]) continue;
+    matched.unshift(entry);
+    activeIndex -= 1;
+  }
+
+  return activeIndex < 0 ? matched : undefined;
 }
 
 function isAlreadyCompacted(text: string): boolean {
@@ -290,6 +318,7 @@ export async function runFutureChurnMaintenance(params: {
   sessionId: string;
   sessionKey?: string;
   sessionFile: string;
+  activeMessages?: AgentMessage[];
   runtimeContext?: ContextEngineRuntimeContextLike;
   config: StablePrefixPluginConfig;
 }): Promise<MaintenanceResult> {
@@ -313,7 +342,21 @@ export async function runFutureChurnMaintenance(params: {
   }
 
   const entries = await loadTranscriptEntries(params.sessionFile);
-  if (entries.length <= (params.config.maintainPreserveTailMessages ?? 8)) {
+  const activeEntries = params.activeMessages
+    ? matchActiveBranchEntries(entries, params.activeMessages)
+    : entries;
+
+  if (!activeEntries) {
+    return {
+      changed: false,
+      bytesFreed: 0,
+      rewrittenEntries: 0,
+      reason: "active-branch-match-unavailable",
+      compactedKinds: {},
+    };
+  }
+
+  if (activeEntries.length <= (params.config.maintainPreserveTailMessages ?? 8)) {
     return {
       changed: false,
       bytesFreed: 0,
@@ -335,7 +378,7 @@ export async function runFutureChurnMaintenance(params: {
   let bytesFreed = 0;
   const compactedKinds: Partial<Record<PromptStabilityBlockKind, number>> = {};
 
-  for (const entry of entries.slice(0, Math.max(0, entries.length - preserveTail))) {
+  for (const entry of activeEntries.slice(0, Math.max(0, activeEntries.length - preserveTail))) {
     if (replacements.length >= maxRewrites) break;
 
     const analysis = analyzeMaintenanceCandidateForMessage(entry.message, params.config);

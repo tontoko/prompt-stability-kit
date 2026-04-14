@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { runFutureChurnMaintenance } from "../src/maintain.js";
+import { matchActiveBranchEntries, runFutureChurnMaintenance } from "../src/maintain.js";
 
 describe("future-turn maintenance", () => {
   it("rewrites older injected envelopes into compacted forms while preserving body text", async () => {
@@ -131,5 +131,165 @@ describe("future-turn maintenance", () => {
 
     expect(result.changed).toBe(false);
     expect(result.reason).toBe("tail-preserved-only");
+  });
+
+  it("matches active branch entries from the latest transcript branch in reverse order", () => {
+    const entries = [
+      {
+        entryId: "old-user",
+        message: { role: "user", content: [{ type: "text", text: "hello" }] },
+      },
+      {
+        entryId: "old-assistant",
+        message: { role: "assistant", content: [{ type: "text", text: "old reply" }] },
+      },
+      {
+        entryId: "new-user",
+        message: { role: "user", content: [{ type: "text", text: "hello" }] },
+      },
+      {
+        entryId: "new-assistant",
+        message: { role: "assistant", content: [{ type: "text", text: "fresh reply" }] },
+      },
+    ];
+
+    const matched = matchActiveBranchEntries(entries as never, [
+      { role: "user", content: [{ type: "text", text: "hello" }] },
+      { role: "assistant", content: [{ type: "text", text: "fresh reply" }] },
+    ]);
+
+    expect(matched?.map((entry) => entry.entryId)).toEqual(["new-user", "new-assistant"]);
+  });
+
+  it("uses active branch messages to produce matching replacements", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "psk-maintain-"));
+    const sessionFile = join(dir, "session.jsonl");
+    const sessionLines = [
+      JSON.stringify({ type: "session", id: "demo" }),
+      JSON.stringify({
+        type: "message",
+        id: "branch-a-user",
+        message: {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: [
+                "Conversation info (untrusted metadata):",
+                "```json",
+                '{"conversation_label":"#general","sender":"alice"}',
+                "```",
+                "",
+                "Sender (untrusted metadata):",
+                "```json",
+                '{"id":"U-old","team":"qa"}',
+                "```",
+                "",
+                "Message body:",
+                "old",
+              ].join("\n"),
+            },
+          ],
+        },
+      }),
+      JSON.stringify({
+        type: "message",
+        id: "branch-a-assistant",
+        message: { role: "assistant", content: [{ type: "text", text: "old assistant" }] },
+      }),
+      JSON.stringify({
+        type: "message",
+        id: "branch-b-user",
+        message: {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: [
+                "Conversation info (untrusted metadata):",
+                "```json",
+                '{"conversation_label":"#general","sender":"bob"}',
+                "```",
+                "",
+                "Sender (untrusted metadata):",
+                "```json",
+                '{"id":"U-live","team":"qa","shift":"night"}',
+                "```",
+                "",
+                "Chat history since last reply (untrusted, for context):",
+                "```text",
+                "bob: a long contextual preface that should be compacted",
+                "assistant: another long contextual reply that should be compacted",
+                "```",
+                "",
+                "Message body:",
+                "live",
+              ].join("\n"),
+            },
+          ],
+        },
+      }),
+      JSON.stringify({
+        type: "message",
+        id: "branch-b-assistant",
+        message: { role: "assistant", content: [{ type: "text", text: "live assistant" }] },
+      }),
+      "",
+    ].join("\n");
+    await writeFile(sessionFile, sessionLines, "utf8");
+
+    let replacements: Array<{ entryId: string }> | undefined;
+    const result = await runFutureChurnMaintenance({
+      sessionId: "demo",
+      sessionFile,
+      activeMessages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: [
+                "Conversation info (untrusted metadata):",
+                "```json",
+                '{"conversation_label":"#general","sender":"bob"}',
+                "```",
+                "",
+                "Sender (untrusted metadata):",
+                "```json",
+                '{"id":"U-live","team":"qa","shift":"night"}',
+                "```",
+                "",
+                "Chat history since last reply (untrusted, for context):",
+                "```text",
+                "bob: a long contextual preface that should be compacted",
+                "assistant: another long contextual reply that should be compacted",
+                "```",
+                "",
+                "Message body:",
+                "live",
+              ].join("\n"),
+            },
+          ],
+        },
+        { role: "assistant", content: [{ type: "text", text: "live assistant" }] },
+      ] as never,
+      runtimeContext: {
+        rewriteTranscriptEntries: async (request) => {
+          replacements = request.replacements as Array<{ entryId: string }>;
+          return {
+            changed: true,
+            bytesFreed: 42,
+            rewrittenEntries: request.replacements.length,
+          };
+        },
+      },
+      config: {
+        maintainPreserveTailMessages: 1,
+        maintainMinBytesSaved: 1,
+      },
+    });
+
+    expect(result.changed).toBe(true);
+    expect(replacements?.map((replacement) => replacement.entryId)).toEqual(["branch-b-user"]);
   });
 });
