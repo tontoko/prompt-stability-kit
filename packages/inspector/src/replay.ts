@@ -1,8 +1,13 @@
 import { readFile } from "node:fs/promises";
-import { normalizeMessages } from "@tontoko/openclaw-stable-prefix-context";
+import type { AgentMessage } from "@mariozechner/pi-agent-core";
+import {
+  analyzeMaintenanceCandidateForMessage,
+  buildCompactedText,
+  normalizeMessages,
+  type StablePrefixPluginConfig,
+} from "@tontoko/openclaw-stable-prefix-context";
 import {
   applyPreFrontierInjectionPolicy,
-  type CorePolicyConfig,
   computeFirstDivergence,
   computePreFrontierInjectionPolicy,
   type EnrichedBlock,
@@ -51,6 +56,8 @@ export type ReplayTurn = {
   movedBlocks: number;
   movedStableIds: string[];
   decisionCounts: Partial<Record<PromptStabilityDecision, number>>;
+  potentialMaintenanceBytesFreed: number;
+  potentialMaintenanceRewrites: number;
 };
 
 export type ReplaySummary = {
@@ -71,11 +78,14 @@ export type ReplaySummary = {
   optimizedAppendOnlyTurns: number;
   turnsWhereCurrentTurnReorderCannotHelp: number;
   turnsWithPotentialCurrentTurnBenefit: number;
+  totalPotentialMaintenanceBytesFreed: number;
+  totalPotentialMaintenanceRewrites: number;
+  turnsWithPotentialMaintenanceBenefit: number;
   topTurnsByUplift: ReplayTurn[];
 };
 
 type ReplayOptions = {
-  config?: CorePolicyConfig;
+  config?: StablePrefixPluginConfig;
   top?: number;
 };
 
@@ -184,6 +194,31 @@ export function replaySession(
         typeof baselineFirstDivergence?.index === "number" &&
         baselineFirstDivergence.index < (previousSent?.length ?? 0);
 
+      const transcriptWithCurrent = [...transcript, message as Record<string, unknown>];
+      const maintenanceWindow = Math.max(
+        0,
+        transcriptWithCurrent.length - (options.config?.maintainPreserveTailMessages ?? 8),
+      );
+      let potentialMaintenanceBytesFreed = 0;
+      let potentialMaintenanceRewrites = 0;
+      for (const priorMessage of transcriptWithCurrent.slice(0, maintenanceWindow)) {
+        const candidate = analyzeMaintenanceCandidateForMessage(
+          priorMessage as unknown as AgentMessage,
+          options.config ?? {},
+        );
+        if (!candidate) continue;
+        const compactedText = buildCompactedText({
+          artifactRef: `replay://${sessionId ?? "session"}/${(priorMessage as { id?: string }).id ?? "entry"}`,
+          compactedKinds: candidate.compactedKinds,
+          bodyText: candidate.bodyText,
+        });
+        const saved = candidate.originalText.length - compactedText.length;
+        const minSaved = options.config?.maintainMinBytesSaved ?? 120;
+        if (saved < minSaved) continue;
+        potentialMaintenanceBytesFreed += saved;
+        potentialMaintenanceRewrites += 1;
+      }
+
       turns.push({
         turnIndex: turns.length,
         assistantMessageId: event.id,
@@ -206,6 +241,8 @@ export function replaySession(
         decisionCounts: countDecisions(
           movement.movedStableIds.map((stableId) => ({ decision: "suffix_ok", stableId })),
         ),
+        potentialMaintenanceBytesFreed,
+        potentialMaintenanceRewrites,
       });
 
       previousSent = runtimePolicy.applied ? optimized : baseline;
@@ -232,6 +269,17 @@ export function replaySession(
   const turnsWithPotentialCurrentTurnBenefit = turns.filter(
     (turn) => turn.currentTurnBenefitPossible,
   ).length;
+  const totalPotentialMaintenanceBytesFreed = turns.reduce(
+    (sum, turn) => sum + turn.potentialMaintenanceBytesFreed,
+    0,
+  );
+  const totalPotentialMaintenanceRewrites = turns.reduce(
+    (sum, turn) => sum + turn.potentialMaintenanceRewrites,
+    0,
+  );
+  const turnsWithPotentialMaintenanceBenefit = turns.filter(
+    (turn) => turn.potentialMaintenanceBytesFreed > 0,
+  ).length;
 
   const summary: ReplaySummary = {
     sessionId,
@@ -255,6 +303,9 @@ export function replaySession(
     optimizedAppendOnlyTurns,
     turnsWhereCurrentTurnReorderCannotHelp,
     turnsWithPotentialCurrentTurnBenefit,
+    totalPotentialMaintenanceBytesFreed,
+    totalPotentialMaintenanceRewrites,
+    turnsWithPotentialMaintenanceBenefit,
     topTurnsByUplift: [...turns]
       .sort(
         (left, right) => right.upliftChars - left.upliftChars || left.turnIndex - right.turnIndex,

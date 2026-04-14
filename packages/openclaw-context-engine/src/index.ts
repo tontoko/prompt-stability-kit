@@ -10,9 +10,16 @@ import { delegateCompactionToRuntime } from "openclaw/plugin-sdk/core";
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 
 import { resolvePluginConfig } from "./config.js";
+import { runFutureChurnMaintenance } from "./maintain.js";
 import { normalizeMessages } from "./normalize.js";
 import { writeTelemetry } from "./telemetry.js";
 
+export type { StablePrefixPluginConfig } from "./config.js";
+export {
+  analyzeMaintenanceCandidateForMessage,
+  buildCompactedText,
+  runFutureChurnMaintenance,
+} from "./maintain.js";
 export { normalizeMessages } from "./normalize.js";
 
 const previousBlocksBySession = new Map<string, EnrichedBlock[]>();
@@ -134,13 +141,37 @@ export default definePluginEntry({
         },
 
         async maintain(params) {
-          void params;
-          return {
-            changed: false,
-            bytesFreed: 0,
-            rewrittenEntries: 0,
-            reason: "reordering-only",
-          };
+          const cfg = resolvePluginConfig(loadConfig().plugins?.entries?.["stable-prefix-context"]);
+          const result = await runFutureChurnMaintenance({
+            sessionId: params.sessionId,
+            sessionKey: params.sessionKey,
+            sessionFile: params.sessionFile,
+            runtimeContext: params.runtimeContext,
+            config: cfg,
+          });
+          if (result.changed) {
+            const historyKey = getHistoryKey({
+              sessionKey: params.sessionKey,
+              sessionId: params.sessionId,
+            });
+            if (historyKey) previousBlocksBySession.delete(historyKey);
+          }
+          await writeTelemetry(cfg.telemetryPath, {
+            timestamp: new Date().toISOString(),
+            engineId: "stable-prefix-context",
+            sessionId: params.sessionId,
+            sessionKey: params.sessionKey,
+            estimatedChars: 0,
+            blockCounts: {},
+            maintenance: {
+              changed: result.changed,
+              reason: result.reason,
+              rewrittenEntries: result.rewrittenEntries,
+              bytesFreed: result.bytesFreed,
+              compactedKinds: result.compactedKinds,
+            },
+          });
+          return result;
         },
 
         async afterTurn(params) {

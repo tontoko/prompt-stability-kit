@@ -15,8 +15,6 @@
     "clean": "rm -rf packages/*/dist packages/*/*.tsbuildinfo coverage",
     "format": "ultracite fix .",
     "lint": "ultracite check .",
-    "openclaw:patch-core": "node scripts/apply-openclaw-core-compaction.mjs",
-    "openclaw:verify-core": "node scripts/verify-openclaw-core-compaction.mjs",
     "test": "vitest run"
   },
   "devDependencies": {

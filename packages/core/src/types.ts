@@ -4,10 +4,13 @@ export type PromptStabilityBlockKind =
   | "tool_inventory"
   | "workspace_policy"
   | "session_summary"
+  | "inbound_notice"
   | "stable_user"
   | "assistant_turn"
   | "tool_result"
   | "conversation_wrapper"
+  | "external_untrusted_context"
+  | "bootstrap_warning"
   | "internal_runtime_event"
   | "system_reminder"
   | "async_exec_notice"
@@ -135,6 +138,13 @@ export type DiagnosticsSnapshot = {
     baselinePrefixChars?: number;
     optimizedPrefixChars?: number;
     upliftChars?: number;
+  };
+  maintenance?: {
+    changed: boolean;
+    reason: string;
+    rewrittenEntries?: number;
+    bytesFreed?: number;
+    compactedKinds?: Partial<Record<PromptStabilityBlockKind, number>>;
   };
 };
 

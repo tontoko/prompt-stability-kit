@@ -14,7 +14,15 @@ describe("session replay evaluator", () => {
           content: [
             {
               type: "text",
-              text: 'Conversation info (untrusted metadata):\n```json\n{"sender":"alice"}\n```\n\nMessage body:\nhello world',
+              text: [
+                "System: [2026-04-10 08:44:46 GMT+9] Slack message in #dev from alice: hello world",
+                "",
+                'Conversation info (untrusted metadata):\n```json\n{"sender":"alice","channel":"#dev"}\n```',
+                "",
+                'Sender (untrusted metadata):\n```json\n{"label":"alice","id":"U123"}\n```',
+                "",
+                "hello world",
+              ].join("\n"),
             },
           ],
         },
@@ -38,7 +46,15 @@ describe("session replay evaluator", () => {
           content: [
             {
               type: "text",
-              text: 'Conversation info (untrusted metadata):\n```json\n{"sender":"alice","message_id":"2"}\n```\n\nMessage body:\nhello world',
+              text: [
+                "System: [2026-04-10 08:45:46 GMT+9] Slack message in #dev from alice: hello world",
+                "",
+                'Conversation info (untrusted metadata):\n```json\n{"sender":"alice","message_id":"2","channel":"#dev"}\n```',
+                "",
+                'Sender (untrusted metadata):\n```json\n{"label":"alice","id":"U123"}\n```',
+                "",
+                "hello world",
+              ].join("\n"),
             },
           ],
         },
@@ -56,15 +72,24 @@ describe("session replay evaluator", () => {
       },
     ];
 
-    const replay = replaySession(events);
+    const replay = replaySession(events, {
+      config: {
+        maintainPreserveTailMessages: 1,
+        maintainMinBytesSaved: 1,
+      },
+    });
 
     expect(replay.summary.totalTurns).toBe(2);
     expect(replay.turns[1]?.baselinePrefixChars).toBeGreaterThan(0);
     expect(replay.turns[1]?.optimizedPrefixChars).toBeGreaterThanOrEqual(0);
     expect(replay.turns[1]?.movedBlocks).toBe(0);
     expect(replay.turns[1]?.upliftChars).toBe(0);
+    expect(replay.turns[1]?.potentialMaintenanceBytesFreed).toBeGreaterThan(0);
+    expect(replay.turns[1]?.potentialMaintenanceRewrites).toBeGreaterThan(0);
     expect(replay.summary.baselineAppendOnlyTurns).toBeGreaterThanOrEqual(0);
     expect(replay.summary.turnsWhereCurrentTurnReorderCannotHelp).toBeGreaterThanOrEqual(0);
+    expect(replay.summary.turnsWithPotentialMaintenanceBenefit).toBeGreaterThan(0);
+    expect(replay.summary.totalPotentialMaintenanceBytesFreed).toBeGreaterThan(0);
     expect(replay.summary.totalActualInputTokens).toBe(200);
   });
 });

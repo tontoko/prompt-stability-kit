@@ -80,6 +80,15 @@ if (options.help || !options.file) {
     console.log(
       `  turns with potential current-turn benefit: ${result.summary.turnsWithPotentialCurrentTurnBenefit}/${result.summary.totalTurns}`,
     );
+    console.log(
+      `  turns with potential maintenance benefit: ${result.summary.turnsWithPotentialMaintenanceBenefit}/${result.summary.totalTurns}`,
+    );
+    console.log(
+      `  potential maintenance rewrites: ${result.summary.totalPotentialMaintenanceRewrites}`,
+    );
+    console.log(
+      `  potential maintenance bytes freed: ${result.summary.totalPotentialMaintenanceBytesFreed}`,
+    );
     console.log(`  baseline prefix chars avg: ${result.summary.averageBaselinePrefixChars}`);
     console.log(`  optimized prefix chars avg: ${result.summary.averageOptimizedPrefixChars}`);
     console.log(`  avg uplift chars: ${result.summary.averageUpliftChars}`);

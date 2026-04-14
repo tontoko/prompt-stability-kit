@@ -18,7 +18,10 @@ const DEFAULT_FIXED_PREFIX_KINDS: PromptStabilityBlockKind[] = [
 ];
 
 const DEFAULT_SUFFIX_KINDS: PromptStabilityBlockKind[] = [
+  "inbound_notice",
   "conversation_wrapper",
+  "external_untrusted_context",
+  "bootstrap_warning",
   "internal_runtime_event",
   "system_reminder",
   "async_exec_notice",

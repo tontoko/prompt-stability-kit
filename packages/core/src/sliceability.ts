@@ -1,7 +1,10 @@
 import type { BlockSliceability, CorePolicyConfig, PromptStabilityBlockKind } from "./types.js";
 
 const DEFAULT_LOSSLESS_WHOLE_MOVABLE_KINDS = new Set<PromptStabilityBlockKind>([
+  "inbound_notice",
   "conversation_wrapper",
+  "external_untrusted_context",
+  "bootstrap_warning",
   "internal_runtime_event",
   "system_reminder",
   "async_exec_notice",

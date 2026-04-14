@@ -4,8 +4,14 @@ import type { CorePolicyConfig, PromptStabilityBlockKind } from "@tontoko/prompt
 
 export type StablePrefixPluginConfig = CorePolicyConfig & {
   telemetryPath?: string;
+  artifactPath?: string;
   maxInternalContextChars?: number;
   maxConversationWrapperBodyChars?: number;
+  maintainMode?: "future-churn-reducer" | "off";
+  maintainPreserveTailMessages?: number;
+  maintainMinBytesSaved?: number;
+  maintainMaxRewritesPerPass?: number;
+  maintainRewriteKinds?: PromptStabilityBlockKind[];
 };
 
 export function resolvePluginConfig(raw: unknown): StablePrefixPluginConfig {
@@ -17,6 +23,10 @@ export function resolvePluginConfig(raw: unknown): StablePrefixPluginConfig {
   return {
     telemetryPath:
       typeof value.telemetryPath === "string" ? expandHome(value.telemetryPath) : undefined,
+    artifactPath:
+      typeof value.artifactPath === "string"
+        ? expandHome(value.artifactPath)
+        : expandHome("~/.openclaw/logs/context-engine/stable-prefix-artifacts"),
     dedupeControlMessages:
       typeof value.dedupeControlMessages === "boolean" ? value.dedupeControlMessages : true,
     maxInternalContextChars:
@@ -27,6 +37,16 @@ export function resolvePluginConfig(raw: unknown): StablePrefixPluginConfig {
         : 1600,
     largeBlockChars: typeof value.largeBlockChars === "number" ? value.largeBlockChars : 1200,
     runtimePolicyMode: value.runtimePolicyMode === "off" ? "off" : "pre-frontier-injected-only",
+    maintainMode: value.maintainMode === "off" ? "off" : "future-churn-reducer",
+    maintainPreserveTailMessages:
+      typeof value.maintainPreserveTailMessages === "number"
+        ? value.maintainPreserveTailMessages
+        : 8,
+    maintainMinBytesSaved:
+      typeof value.maintainMinBytesSaved === "number" ? value.maintainMinBytesSaved : 120,
+    maintainMaxRewritesPerPass:
+      typeof value.maintainMaxRewritesPerPass === "number" ? value.maintainMaxRewritesPerPass : 6,
+    maintainRewriteKinds: parseBlockKindArray(value.maintainRewriteKinds),
     preFrontierInjectedWindowBlocks:
       typeof value.preFrontierInjectedWindowBlocks === "number"
         ? value.preFrontierInjectedWindowBlocks
@@ -48,10 +68,13 @@ const BLOCK_KINDS = new Set<PromptStabilityBlockKind>([
   "tool_inventory",
   "workspace_policy",
   "session_summary",
+  "inbound_notice",
   "stable_user",
   "assistant_turn",
   "tool_result",
   "conversation_wrapper",
+  "external_untrusted_context",
+  "bootstrap_warning",
   "internal_runtime_event",
   "system_reminder",
   "async_exec_notice",

@@ -11,6 +11,10 @@
         "type": "string",
         "description": "Optional JSONL output path for assemble diagnostics."
       },
+      "artifactPath": {
+        "type": "string",
+        "description": "Optional directory for sidecar artifacts created by post-turn injected-context compaction."
+      },
       "dedupeControlMessages": {
         "type": "boolean",
         "default": true,
@@ -77,6 +81,32 @@
         "enum": ["pre-frontier-injected-only", "off"],
         "default": "pre-frontier-injected-only",
         "description": "Runtime policy mode. The default only acts on pre-frontier injected volatility."
+      },
+      "maintainMode": {
+        "type": "string",
+        "enum": ["future-churn-reducer", "off"],
+        "default": "future-churn-reducer",
+        "description": "Post-turn maintenance mode. The default rewrites older injected context into shorter compacted forms for future-turn churn reduction."
+      },
+      "maintainPreserveTailMessages": {
+        "type": "number",
+        "default": 8,
+        "description": "Number of newest transcript messages to leave untouched during post-turn maintenance."
+      },
+      "maintainMinBytesSaved": {
+        "type": "number",
+        "default": 120,
+        "description": "Minimum estimated byte savings required before a transcript entry is rewritten during maintenance."
+      },
+      "maintainMaxRewritesPerPass": {
+        "type": "number",
+        "default": 6,
+        "description": "Maximum number of transcript entries to rewrite in a single maintenance pass."
+      },
+      "maintainRewriteKinds": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Optional override for injected-volatility block kinds eligible for post-turn future-churn reduction."
       },
       "minConfidenceToReorder": {
         "type": "number",

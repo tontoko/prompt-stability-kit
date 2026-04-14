@@ -105,6 +105,7 @@ The OpenClaw adapter owns:
 - OpenClaw context-engine registration
 - message normalization into core blocks
 - pre-frontier injected-volatility runtime policy
+- post-turn future-churn reduction for older injected context
 - adapter-specific telemetry wiring
 - adapter-specific install and runtime configuration
 
@@ -156,25 +157,6 @@ prompt-stability-compare \
   --candidate new-a.jsonl new-b.jsonl
 ```
 
-Apply the current local OpenClaw core compaction patches without restarting the
-gateway:
-
-```bash
-npm run openclaw:patch-core
-npm run openclaw:verify-core
-```
-
-These scripts target the live dist bundle in the local OpenClaw install and are
-intended for reproducible local testing of lossless envelope compaction.
-By default they target the version-pinned install at:
-
-```text
-/home/hirakitomohiko/.volta/tools/image/node/24.12.0/lib/node_modules/openclaw/dist
-```
-
-Use `--dist <path>` if your OpenClaw install lives elsewhere, and rerun them
-after every OpenClaw upgrade.
-
 ## OpenClaw install
 
 Install the adapter from a local checkout:
@@ -195,7 +177,8 @@ Then enable it in `~/.openclaw/openclaw.json`:
       "stable-prefix-context": {
         "enabled": true,
         "config": {
-          "telemetryPath": "~/.openclaw/logs/context-engine/stable-prefix.jsonl"
+          "telemetryPath": "~/.openclaw/logs/context-engine/stable-prefix.jsonl",
+          "maintainMode": "future-churn-reducer"
         }
       }
     }

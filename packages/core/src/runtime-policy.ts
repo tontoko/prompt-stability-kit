@@ -3,7 +3,10 @@ import { isPreFrontierMovableSliceability } from "./sliceability.js";
 import type { EnrichedBlock, RuntimePolicyPlan } from "./types.js";
 
 const DEFAULT_PRE_FRONTIER_INJECTED_KINDS = new Set([
+  "inbound_notice",
   "conversation_wrapper",
+  "external_untrusted_context",
+  "bootstrap_warning",
   "internal_runtime_event",
   "system_reminder",
   "async_exec_notice",
